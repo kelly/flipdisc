@@ -1,0 +1,15 @@
+{
+  "name": "flipdisc",
+  "version": "0.0.1",
+  "description": "a js lib for AlfaZeta flipdot/flipdisc displays",
+  "type": "module",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "serialport": "^12.0.0"
+  }
+}
