@@ -1,14 +1,21 @@
 {
   "name": "flipdisc",
-  "version": "0.0.1",
-  "description": "a js lib for AlfaZeta flipdot/flipdisc displays",
+  "version": "0.0.2",
+  "description": "a javascript library for flipdot and flipdisc displays",
   "type": "module",
   "main": "index.js",
+  "keywords": [
+    "flipdot",
+    "flipdisc",
+    "AlfaZeta",
+    "breakfast",
+    "display"
+  ],
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
-  "author": "",
-  "license": "ISC",
+  "author": "@kelly",
+  "license": "BSD-3-Clause-Attribution",
   "dependencies": {
     "serialport": "^12.0.0"
   }

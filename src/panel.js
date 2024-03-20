@@ -1,4 +1,4 @@
-import Utilities from './utilities.js'
+import { packBits } from './utilities.js'
 
 const START_BYTES_FLUSH = [0x80, 0x83]
 const START_BYTES_BUFFER = [0x80, 0x84]
@@ -12,7 +12,6 @@ export default class Panel {
     this.width = width || PANEL_WIDTH_DEFAULT;
     this.height = height || PANEL_HEIGHT_DEFAULT;
     this.content = Uint8Array.from({ length: height }, () => Uint8Array(width).fill(0))
-    this.content[2] ? this.content[2][1] = 0x01 : null;
   }
 
   setContent(content) {
@@ -21,7 +20,7 @@ export default class Panel {
 
   getSerialFormat(flush = true) {
     const startBytes = flush ? START_BYTES_FLUSH : START_BYTES_BUFFER;
-    const serializedContent = Utilities.packBits(this.content, 0, 'big')
+    const serializedContent = packBits(this.content, 0, 'big')
     const serialCommand = [
         ...startBytes,
         this.address,
