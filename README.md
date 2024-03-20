@@ -2,6 +2,9 @@
 
 A javascript library for flipdot and flipdisc displays.
 
+![panel](https://github.com/kelly/flipdisc/assets/36345/d047c0b2-4fda-4fbf-9702-5808e23f5a3f)
+
+
 ## Install
 
 ````bash
