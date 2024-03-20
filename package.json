@@ -6,9 +6,10 @@
   "main": "index.js",
   "keywords": [
     "flipdot",
+    "flip-dot",
+    "flip-disc",
     "flipdisc",
     "AlfaZeta",
-    "breakfast",
     "display"
   ],
   "scripts": {
