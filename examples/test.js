@@ -1,7 +1,8 @@
 import { createDisplay } from '../index.js'
-import { sleep } from '../src/utilities.js'
 
 const display = createDisplay([[1], [2]], '/dev/cu.usbserial-AB0OJSKG', { isMirrored: true })
+
+const sleep = (ms) => { return new Promise(r => setTimeout(r, ms)) }
 
 const fill = (color) => {
   let frame = Array.from({ length: display.height }, () => Array.from({ length: display.width }, () => color));

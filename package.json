@@ -1,9 +1,12 @@
 {
   "name": "flipdisc",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "description": "a javascript library for flipdot and flipdisc displays",
   "type": "module",
-  "main": "index.js",
+  "exports": {
+    "import": "./index.js",
+    "require": "./index.cjs"
+  },
   "keywords": [
     "flipdot",
     "flip-dot",
@@ -13,7 +16,8 @@
     "display"
   ],
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "package" : "npx rollup index.js --file index.cjs --format cjs"
   },
   "author": "@kelly",
   "license": "BSD-3-Clause-Attribution",
