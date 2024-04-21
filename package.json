@@ -1,6 +1,6 @@
 {
   "name": "flipdisc",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "description": "a javascript library for flipdot and flipdisc displays",
   "type": "module",
   "exports": {
@@ -13,15 +13,18 @@
     "flip-disc",
     "flipdisc",
     "AlfaZeta",
-    "display"
+    "display",
+    "hanover",
+    "pixel art"
   ],
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "package" : "npx rollup index.js --file index.cjs --format cjs"
+    "package": "npx rollup index.js --file index.cjs --format cjs"
   },
   "author": "@kelly",
   "license": "BSD-3-Clause-Attribution",
   "dependencies": {
+    "connection-string": "^4.4.0",
     "serialport": "^12.0.0"
   }
 }

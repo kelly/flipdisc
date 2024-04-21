@@ -1,11 +1,15 @@
 import Display from './src/display.js'
+import * as Utils from './src/utils.js'
 
 const defaults = {
   rotation: 0,
   isMirrored: false,
   isInverted: false,
-  panelWidth: 28,
-  panelHeight: 14
+  panel: {
+    width: 28,
+    height: 7,
+    type: 'AlfaZeta'
+  }
 }
 
 const createDisplay = (layout, devicePath, options = defaults) => {
@@ -13,4 +17,4 @@ const createDisplay = (layout, devicePath, options = defaults) => {
   return new Display(layout, devicePath, options)
 }
 
-export { Display, createDisplay }
+export { Display, createDisplay, Utils }

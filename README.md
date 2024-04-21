@@ -17,7 +17,7 @@ $ npm install flipdisc
 
 import { createDisplay } from 'flipdisc' // ...or const { createDisplay } = require('flipdisc')
 
-const display = createDisplay([[1], [2]], '/dev/cu.usbserial-AB0OJSKG')
+const display = createDisplay([[1], [2]], '/dev/cu.usbserial-AB0OJSKG') // ... or network address of RS485 server e.g. 'tcp://192.168.1.100:3000'
 display.send(frameData)
 
 ````
@@ -39,13 +39,24 @@ const devices = [{
 }, {
   path: '/dev/cu.usbserial-AB0ODKET',
   addresses: [2, 4, 6],
-  bausdRate: 57600
+  baudRate: 57600
 }]
+
+// or network devices
+const devices = [{
+  path: 'tcp://192.168.0.100:3000',
+  addresses: [1, 2, 3, 4, 5, 6],
+}]
+
+
 const options = {
   isMirrored: true,
   rotation: 90,
-  panelWidth: 28,
-  panelHeight: 14
+  panel: {
+    width: 28,
+    height: 7,
+    type: 'AlfaZeta' // or 'Hanover'
+  }
 
 }
 const display = createDisplay(layout, device, options)
@@ -63,24 +74,27 @@ display.send(frameData)
 display.sendImageData(imageData)
 
 // get width
-display.width()
+display.width
 
 // get height
-display.height()
+display.height
 
 // get current display data
-display.getContent()
+display.content
 
 // set inverted
 display.setInverted()
 
-````
+// get general display info
+display.info
 
+
+````
 
 ## Requirements
 
-- RS485 serial device. e.g. [USB to RS485] (https://a.co/d/7IHOosr)
-- A flipdisc panel. Currently [AlfaZeta panels](https://flipdots.com/en/home/) supported. [Reach out](http://x.com/korevec) if you want me to support your panel.
+- RS485 serial device. e.g. [USB to RS485] (https://a.co/d/7IHOosr) or [Ethernet to RS485] (https://a.co/d/1TIwvfq)
+- A flipdisc panel. Currently [AlfaZeta panels](https://flipdots.com/en/home/) and [Hanover panels](https://www.hanoverdisplays.com/) supported. [Reach out](http://x.com/korevec) if you want me to support your panel.
 
 ## Projects
 

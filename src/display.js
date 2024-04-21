@@ -1,8 +1,6 @@
-import { SerialPort } from 'serialport'
-import Panel from './panel.js'
-import { concatTypedArrays, sleep } from './utilities.js'
-
-const BAUD_RATE_DEFAULT = 57600
+import * as Utils from './utils.js'
+import * as Panels from './panels/index.js'
+import * as Devices from './devices/index.js'
 
 export default class Display {
   constructor(layout, devices, options) {
@@ -10,14 +8,18 @@ export default class Display {
     this.devices = []
     this.rotation = options.rotation,
     this.isMirrored = options.isMirrored
+    this.lastSendTime = null;
+    this.minSendInterval = 5;
+    this.lastFrameData = [];
+    this.isConnected = false
 
-    if (!devices) {
+    if (!devices) 
       throw new Error("Device Path must not be empty");
-    }
+    
 
-    if (!layout.length || !layout[0].length) {
+    if (!layout.length || !layout[0].length) 
       throw new Error("Panel layout must not be empty");
-    }
+    
     // Example devices:
     // [ {path: '/dev/cu.usbserial-AB0OJSKG', baudRate: 57600, panels: [1, 2, 3, 4]}, 
     //   {path: '/dev/cu.usbserial-AB0OJSKF', baudRate: 57600, panels: [5, 6, 7, 8]}]
@@ -27,42 +29,52 @@ export default class Display {
     this._initDevices(devices)
   }
 
-
   _initDevices(devices) {
     devices = (devices.constructor !== Array) ? [devices] : devices
-    devices.forEach(device => {
-      this._initSerialPort(device)
+    devices.forEach(args => {
+      this._initDevice(args)
     })
   }
 
-  _initSerialPort(device) {
-    if (device.constructor === String) { 
-      device = {
-        path: device,
-        addresses: this.panels.flat().map(panel => panel.address) // map all addresses if not specified 
+  _initDevice(args) {
+    if (args.constructor === String) {
+      args = {
+        path: args,
+        addresses: this.allPanelAddresses
       }
     }
 
-    device.port = new SerialPort({ 
-      path: device.path, 
-      baudRate: device.baudRate || BAUD_RATE_DEFAULT,
-      autoOpen: true,
-      function (err) {
-        if (err) {
-          throw new Error('Serial Error: ', err.message)
-        }
-      }
-    })
+    const Device = Devices.deviceForInput(args.path)
+    const device = new Device(args.path, args.addresses, args.baudRate)
+    device.open(() => this._setConnected())
 
     this.devices.push(device)
   }
 
+  _setConnected() { 
+    this.isConnected = true
+    process.once('exit', () => {
+      this._closeDevices()
+      process.removeAllListeners('exit')
+    })
+  }
+
+  _closeDevices() {
+    this.devices.forEach(device => {
+      device.removeAllListeners()
+      device.close()
+    })
+  }
+
   _initPanels(layout, options) {
+    const { width, height, type } = options;
+    const Panel = Panels.panelForType(type)
+
     layout.forEach(row => {
       let rows = [];
 
       row.forEach(address => {
-        rows.push(new Panel(address, options?.width, options?.height));
+        rows.push(new Panel(address, width, height));
       });
 
       this.panels = this.panels === null ? [rows] : this.panels.concat([rows]);
@@ -117,65 +129,37 @@ export default class Display {
   }
 
   _formatOrientation(frameData) {
-    if (this.rotation != 0) {
+    if (this.rotation != 0) 
       frameData = this._rotate(frameData, this.rotation)
-    }
-
-    if (this.isMirrored) {
+    
+    if (this.isMirrored) 
       frameData = this._mirror(frameData)
-    }
 
-    if (this.isInverted) {
+    if (this.isInverted) 
       frameData = this._invert(frameData)
-    }
 
     return frameData
-  }
-
-  _getLuminanceRGB(r, g, b) {
-    const luminance = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
-    return luminance < 0.5 ? 0 : 1;
-  }
-
-  _formatRGBAPixels(imageData) {
-    const pixelArray = new Array(this.height)
-    const width = this.width
-    const height = this.height
-
-    for (let y = 0; y < height; y++) {
-      const row = new Array(width);
-      const yWidth = y * width * 4;
-
-      for (let x = 0; x < width; x++) {
-        const i = yWidth + x * 4;
-        row[x] = this._getLuminanceRGB(imageData[i], imageData[i + 1], imageData[i + 2]);
-      }
-
-      pixelArray[y] = row;
-    }
-
-    return pixelArray;
   }
 
   _formatSerialData(frameData, addresses, flush) {
     let serialData = new Uint8Array()
     frameData = this._formatOrientation(frameData)
+    const panelWidth = this._basePanel.width
+    const panelHeight = this._basePanel.height
+    const rows = this.rows
+    const cols = this.cols
 
-    for (let r = 0; r < this.panels.length; r++) {
+    for (let r = 0; r < rows; r++) {
       const row = this.panels[r];
-
-      for (let c = 0; c < row.length; c++) {
+      for (let c = 0; c < cols; c++) {
         const panel = row[c];
-        const panelWidth = this._basePanel.width
-        const panelHeight = this._basePanel.height
-
         const panelData = frameData.slice(r * panelHeight, (r + 1) * panelHeight)
           .map(row => row.slice(c * panelWidth, (c + 1) * panelWidth));
 
         if (addresses.indexOf(row[c].address) !== -1) {
           // add to serial data if address is in the list
           panel.setContent(panelData);
-          serialData = concatTypedArrays(serialData, panel.getSerialFormat(flush))
+          serialData = Utils.concatTypedArrays(serialData, panel.getSerialFormat(flush))
         }
       }
     }
@@ -187,31 +171,62 @@ export default class Display {
   }
 
   get width() {
-    return this._basePanel.width * this.panels[0].length;
+    return this.panelWidth * this.cols;
   }
 
   get height() {
-    return this._basePanel.height * this.panels.length;
+    return this.panelHeight * this.rows;
   }
 
-  getContent() {
+  get content() {
     return this.panels.map(row => row.map(panel => panel.content));
   }
 
+  get allPanelAddresses() {
+    return this.panels.flat().map(panel => panel.address)
+  }
+
+  get panelWidth() {
+    return this._basePanel.width;
+  }
+
+  get panelHeight() {
+    return this._basePanel.height;
+  }
+
+  get rows() {
+    return this.panels.length;
+  }
+
+  get cols() {
+    return this.panels[0].length;
+  }
+
+  get info() {
+    const { width, height, rotation, isMirrored, isInverted, 
+      content, panelWidth, panelHeight, isConnected, lastSendTime } = this;
+    return {
+      width,
+      height,
+      rotation,
+      isMirrored,
+      isInverted,
+      panelHeight,
+      panelWidth,
+      lastSendTime,
+      isConnected,
+      content,
+    }
+  }
+
   sendImageData(imageData) {
-    const pixels = this._formatRGBAPixels(imageData)
+    const pixels = Utils.formatRGBAPixels(imageData)
     this.send(pixels)
   }
 
   _sendToDevice(device, frameData, flush) {
-    if (!device.port.isOpen) {
-      return device.port.on('open', () => {
-        sleep(1000)
-        this._sendToDevice(device, frameData, flush)
-      })
-    }
     const serialData = this._formatSerialData(frameData, device.addresses, flush = true)
-    device.port.write(serialData, function(err) {
+    device.write(serialData, function(err) {
       if (err) {
         return console.log('Error on write: ', err.message)      
       }
@@ -219,9 +234,21 @@ export default class Display {
   }
  
   send(frameData, flush) {
-    if (this.devices.length === 0) {
-      throw new Error('No serial ports available')
-    }
+    if (this.devices.length === 0) 
+      throw new Error('no serial ports available')
+    
+    if (frameData?.length !== this.height || frameData[0]?.length !== this.width) 
+      throw new Error('frame data does not match display dimensions')
+
+    if (this.lastSendTime && ((Date.now() - this.lastSendTime) < this.minSendInterval)) 
+      console.warn('rendering too quickly. you might be calling render incorrectly')
+
+    if (Utils.areArraysEqual(frameData, this.lastFrameData)) 
+      return;
+
+    this.lastSendTime = Date.now();
+    this.lastFrameData = frameData;
+    
     this.devices.forEach(device => {
       this._sendToDevice(device, frameData, flush)
     })
