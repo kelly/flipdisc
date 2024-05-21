@@ -2,8 +2,21 @@ import * as Utils from './utils.js'
 import * as Panels from './panels/index.js'
 import * as Devices from './devices/index.js'
 
+const defaults = {
+  rotation: 0,
+  isMirrored: false,
+  isInverted: false,
+  panel: {
+    width: 28,
+    height: 7,
+    type: 'AlfaZeta'
+  }
+}
+
 export default class Display {
+
   constructor(layout, devices, options) {
+    options = { ...defaults, ...options }
     this.panels = [];
     this.devices = []
     this.rotation = options.rotation,
@@ -178,8 +191,23 @@ export default class Display {
     return this.panelHeight * this.rows;
   }
 
+  get aspect() {
+    return this.width / this.height;
+  }
+
+  get panelContent() {
+    return this.panels.map(row => row.map(panel => panel.content))
+  }
+
   get content() {
-    return this.panels.map(row => row.map(panel => panel.content));
+    const content = [];
+    this.panels.forEach(row => {
+      const rowData = row.map(panel => panel.content);
+      for (let i = 0; i < this.panelHeight; i++) {
+        content.push(rowData.map(panel => panel[i]).flat());
+      }
+    });
+    return this._formatOrientation(content);
   }
 
   get allPanelAddresses() {
@@ -227,9 +255,8 @@ export default class Display {
   _sendToDevice(device, frameData, flush) {
     const serialData = this._formatSerialData(frameData, device.addresses, flush = true)
     device.write(serialData, function(err) {
-      if (err) {
+      if (err) 
         return console.log('Error on write: ', err.message)      
-      }
     })
   }
  
@@ -239,12 +266,16 @@ export default class Display {
     
     if (frameData?.length !== this.height || frameData[0]?.length !== this.width) 
       throw new Error('frame data does not match display dimensions')
+    
+    if (Utils.areArraysEqual(frameData, this.lastFrameData)) 
+      return;
+
+    if (Utils.isImageData(frameData)) 
+      frameData = Utils.formatRGBAPixels(frameData)
 
     if (this.lastSendTime && ((Date.now() - this.lastSendTime) < this.minSendInterval)) 
       console.warn('rendering too quickly. you might be calling render incorrectly')
 
-    if (Utils.areArraysEqual(frameData, this.lastFrameData)) 
-      return;
 
     this.lastSendTime = Date.now();
     this.lastFrameData = frameData;

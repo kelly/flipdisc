@@ -103,6 +103,11 @@ function formatRGBAPixels(imageData) {
   return pixelArray;
 }
 
+function isImageData(data) {
+  if (!data) return false;
+  return !Array.isArray(data[0])
+}
 
 
-export { concatTypedArrays, packBits, reverseBits, sleep, mergeFrames, areArraysEqual, formatRGBAPixels }
+
+export { concatTypedArrays, packBits, reverseBits, sleep, mergeFrames, areArraysEqual, formatRGBAPixels, isImageData }

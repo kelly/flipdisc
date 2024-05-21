@@ -111,11 +111,17 @@ function formatRGBAPixels(imageData) {
   return pixelArray;
 }
 
+function isImageData(data) {
+  if (!data) return false;
+  return !Array.isArray(data[0])
+}
+
 var utils = /*#__PURE__*/Object.freeze({
   __proto__: null,
   areArraysEqual: areArraysEqual,
   concatTypedArrays: concatTypedArrays,
   formatRGBAPixels: formatRGBAPixels,
+  isImageData: isImageData,
   mergeFrames: mergeFrames,
   packBits: packBits,
   reverseBits: reverseBits,
@@ -232,13 +238,33 @@ class Device extends EventEmitter {
   constructor(path, addresses) {
     super();
 
+    this.queue = [];
+    this.maxQueueLength = 10;
     this.path = path;
     this.addresses = addresses;
     this.isOpen = false;
   }
 
+  _addToQueue(data, callback) {
+    this.queue.push(data);
+    this.once('open', () => {
+      this.queue.forEach(data => this.write(data));
+      this.queue = [];
+      
+      callback();
+    });
+
+    if (this.queue.length > this.maxQueueLength) 
+      this.queue.shift();
+  }
+
   open(callback) {}
-  send(data, callback) {}
+  write(data, callback) {
+    if (!this.isOpen) {
+      this._addToQueue(data, callback);
+      return;
+    }  }
+
   close() {}
 
 
@@ -251,18 +277,21 @@ class USBDevice extends Device {
   constructor(path, addresses, baudRate) {
     super(path, addresses);
     this.baudRate = baudRate || BAUD_RATE_DEFAULT;
+    this.autoOpen = true;
   }
 
   open(callback) {
+    const { path, baudRate, autoOpen } = this;
+
     this.port = new serialport.SerialPort({ 
-      path: this.path, 
-      baudRate: this.baudRate,
-      autoOpen: true,
+      path,
+      baudRate,
+      autoOpen
     }, (err) => {
       if (err) {
         throw new Error(err)
       } else {
-        console.log(`Opened USB Device: ${this.path} baud rate: ${this.baudRate}`);
+        console.log(`opened USB device: ${this.path} baud rate: ${this.baudRate}`);
         this.isOpen = true;
         this.emit('open');
         callback();
@@ -271,9 +300,7 @@ class USBDevice extends Device {
   );}
   
   write(data, callback) {
-    if (!this.isOpen) {
-      console.warn('Device is not open');
-    }
+    super.write(data, callback);
     this.port.write(data, callback);
   }
 
@@ -306,7 +333,7 @@ class NetworkDevice extends Device {
 
     this.socket = protocol == 'udp' ? udp.createSocket('udp4') : new net.Socket();
     this.socket.connect(port, hostname, () => {
-      console.log(`Opened Connection: ${protocol} port: ${port} hostname: ${hostname}`);
+      console.log(`opened connection: ${protocol} port: ${port} hostname: ${hostname}`);
 
       this.isOpen = true;
       this.emit('open');
@@ -315,10 +342,7 @@ class NetworkDevice extends Device {
   }
 
   write(data, callback) {
-    if (!this.isOpen) {
-      console.warn('Device is not open');
-      return;
-    }
+    super.write(data, callback);
     (this.socket instanceof net.Socket) ? this.socket.write(data, callback) : this.socket.send(data, callback);
   }
 
@@ -339,8 +363,21 @@ function deviceForInput(input) {
   }
 }
 
+const defaults$1 = {
+  rotation: 0,
+  isMirrored: false,
+  isInverted: false,
+  panel: {
+    width: 28,
+    height: 7,
+    type: 'AlfaZeta'
+  }
+};
+
 class Display {
+
   constructor(layout, devices, options) {
+    options = { ...defaults$1, ...options };
     this.panels = [];
     this.devices = [];
     this.rotation = options.rotation,
@@ -350,13 +387,13 @@ class Display {
     this.lastFrameData = [];
     this.isConnected = false;
 
-    if (!devices) {
+    if (!devices) 
       throw new Error("Device Path must not be empty");
-    }
+    
 
-    if (!layout.length || !layout[0].length) {
+    if (!layout.length || !layout[0].length) 
       throw new Error("Panel layout must not be empty");
-    }
+    
     // Example devices:
     // [ {path: '/dev/cu.usbserial-AB0OJSKG', baudRate: 57600, panels: [1, 2, 3, 4]}, 
     //   {path: '/dev/cu.usbserial-AB0OJSKF', baudRate: 57600, panels: [5, 6, 7, 8]}]
@@ -365,7 +402,6 @@ class Display {
     this._initPanels(layout, options.panel);
     this._initDevices(devices);
   }
-
 
   _initDevices(devices) {
     devices = (devices.constructor !== Array) ? [devices] : devices;
@@ -391,7 +427,7 @@ class Display {
 
   _setConnected() { 
     this.isConnected = true;
-    process.on('exit', () => {
+    process.once('exit', () => {
       this._closeDevices();
       process.removeAllListeners('exit');
     });
@@ -467,17 +503,14 @@ class Display {
   }
 
   _formatOrientation(frameData) {
-    if (this.rotation != 0) {
+    if (this.rotation != 0) 
       frameData = this._rotate(frameData, this.rotation);
-    }
-
-    if (this.isMirrored) {
+    
+    if (this.isMirrored) 
       frameData = this._mirror(frameData);
-    }
 
-    if (this.isInverted) {
+    if (this.isInverted) 
       frameData = this._invert(frameData);
-    }
 
     return frameData
   }
@@ -487,11 +520,11 @@ class Display {
     frameData = this._formatOrientation(frameData);
     const panelWidth = this._basePanel.width;
     const panelHeight = this._basePanel.height;
-    const rows = this.panels.length;
+    const rows = this.rows;
+    const cols = this.cols;
 
     for (let r = 0; r < rows; r++) {
       const row = this.panels[r];
-      const cols = row.length;
       for (let c = 0; c < cols; c++) {
         const panel = row[c];
         const panelData = frameData.slice(r * panelHeight, (r + 1) * panelHeight)
@@ -519,8 +552,23 @@ class Display {
     return this.panelHeight * this.rows;
   }
 
+  get aspect() {
+    return this.width / this.height;
+  }
+
+  get panelContent() {
+    return this.panels.map(row => row.map(panel => panel.content))
+  }
+
   get content() {
-    return this.panels.map(row => row.map(panel => panel.content));
+    const content = [];
+    this.panels.forEach(row => {
+      const rowData = row.map(panel => panel.content);
+      for (let i = 0; i < this.panelHeight; i++) {
+        content.push(rowData.map(panel => panel[i]).flat());
+      }
+    });
+    return this._formatOrientation(content);
   }
 
   get allPanelAddresses() {
@@ -566,33 +614,29 @@ class Display {
   }
 
   _sendToDevice(device, frameData, flush) {
-    if (!device.isOpen) {
-      return device.on('open', () => {
-        console.log('not open');
-        sleep(1000); // time to wake-up
-        this._sendToDevice(device, frameData, flush);
-      })
-    }
-    const serialData = this._formatSerialData(frameData, device.addresses, flush = true);
+    const serialData = this._formatSerialData(frameData, device.addresses, true);
     device.write(serialData, function(err) {
-      if (err) {
+      if (err) 
         return console.log('Error on write: ', err.message)      
-      }
     });
   }
  
   send(frameData, flush) {
     if (this.devices.length === 0) 
-      throw new Error('No serial ports available')
+      throw new Error('no serial ports available')
     
     if (frameData?.length !== this.height || frameData[0]?.length !== this.width) 
-      throw new Error('Frame data does not match display dimensions')
-
-    if (this.lastSendTime && ((Date.now() - this.lastSendTime) < this.minSendInterval)) 
-      console.warn('Rendering too quickly. You might be calling render incorrectly');
-
+      throw new Error('frame data does not match display dimensions')
+    
     if (areArraysEqual(frameData, this.lastFrameData)) 
       return;
+
+    if (isImageData(frameData)) 
+      frameData = formatRGBAPixels(frameData);
+
+    if (this.lastSendTime && ((Date.now() - this.lastSendTime) < this.minSendInterval)) 
+      console.warn('rendering too quickly. you might be calling render incorrectly');
+
 
     this.lastSendTime = Date.now();
     this.lastFrameData = frameData;
@@ -603,18 +647,7 @@ class Display {
   }
 }
 
-const defaults = {
-  rotation: 0,
-  isMirrored: false,
-  isInverted: false,
-  panel: {
-    width: 28,
-    height: 14,
-    type: 'AlfaZeta'
-  }
-};
-
-const createDisplay = (layout, devicePath, options = defaults) => {
+const createDisplay = (layout, devicePath, options) => {
   options = { ...defaults, ...options };
   return new Display(layout, devicePath, options)
 };
