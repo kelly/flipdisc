@@ -4,27 +4,30 @@ A javascript library for flipdot and flipdisc displays.
 
 ![panel](https://github.com/kelly/flipdisc/assets/36345/d047c0b2-4fda-4fbf-9702-5808e23f5a3f)
 
+- [Github](http://www.github.com/kelly/flipdisc)
+- [NPM](https://www.npmjs.com/package/flipdisc)
 
-## Install
+### Install
 
-````bash
+```bash
 $ npm install flipdisc
-````
+```
 
-## Simple Usage
+### Simple Usage
 
-```javascript
+```js
 
-import { createDisplay } from 'flipdisc' // ...or const { createDisplay } = require('flipdisc')
+import { createDisplay } from 'flipdisc' 
 
-const display = createDisplay([[1], [2]], '/dev/cu.usbserial-AB0OJSKG') // ... or network address of RS485 server e.g. 'tcp://192.168.1.100:3000'
+const device = '/dev/cu.usbserial-AB0OJSKG' 
+const display = createDisplay([[1], [2]], device)
 display.send(frameData)
 
-````
+```
 
-## Advanced Usage 
+### Advanced Usage 
 
-```javascript
+```js
 
 import { createDisplay } from 'flipdisc' 
 
@@ -32,7 +35,7 @@ import { createDisplay } from 'flipdisc'
 const layout = [[1, 3, 5], [2, 4, 6]]
 
 // supports multiple RS485 devices
-const devices = [{
+const dev = [{
   path: '/dev/cu.usbserial-AB0OJSKG',
   addresses: [1, 3, 5],
   baudRate: 57600
@@ -49,7 +52,7 @@ const devices = [{
 }]
 
 
-const options = {
+const opt = {
   isMirrored: true,
   rotation: 90,
   panel: {
@@ -59,15 +62,16 @@ const options = {
   }
 
 }
-const display = createDisplay(layout, device, options)
-````
+const display = createDisplay(layout, dev, opt)
+```
 
 
-## Methods
+### Methods
 
-```javascript
+```js
 
-// send a single 2D array of frame data. (0 = not-flipped, 1 = flipped)
+// send a single 2D array of frame data. 
+// (0 = not-flipped, 1 = flipped)
 display.send(frameData)
 
 // send imageData from a gl or canvas instance
@@ -89,13 +93,9 @@ display.setInverted()
 display.info
 
 
-````
+```
 
-## Requirements
+### Requirements
 
 - RS485 serial device. e.g. [USB to RS485] (https://a.co/d/7IHOosr) or [Ethernet to RS485] (https://a.co/d/1TIwvfq)
 - A flipdisc panel. Currently [AlfaZeta panels](https://flipdots.com/en/home/) and [Hanover panels](https://www.hanoverdisplays.com/) supported. [Reach out](http://x.com/korevec) if you want me to support your panel.
-
-## Projects
-
-*Coming Soon!*

@@ -108,6 +108,10 @@ function isImageData(data) {
   return !Array.isArray(data[0])
 }
 
+function isEmptyArray(arr) {
+  // if 1d or 2d array only has elements that are 0
+  return arr.every(row => row.every(el => el === 0))
+}
 
 
-export { concatTypedArrays, packBits, reverseBits, sleep, mergeFrames, areArraysEqual, formatRGBAPixels, isImageData }
+export { concatTypedArrays, packBits, reverseBits, sleep, mergeFrames, areArraysEqual, formatRGBAPixels, isImageData, isEmptyArray }
