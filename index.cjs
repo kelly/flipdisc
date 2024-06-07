@@ -116,11 +116,17 @@ function isImageData(data) {
   return !Array.isArray(data[0])
 }
 
+function isEmptyArray(arr) {
+  // if 1d or 2d array only has elements that are 0
+  return arr.every(row => row.every(el => el === 0))
+}
+
 var utils = /*#__PURE__*/Object.freeze({
   __proto__: null,
   areArraysEqual: areArraysEqual,
   concatTypedArrays: concatTypedArrays,
   formatRGBAPixels: formatRGBAPixels,
+  isEmptyArray: isEmptyArray,
   isImageData: isImageData,
   mergeFrames: mergeFrames,
   packBits: packBits,
