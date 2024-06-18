@@ -289,6 +289,11 @@ class USBDevice extends Device {
   open(callback) {
     const { path, baudRate, autoOpen } = this;
 
+    if (!this._isSerialAvailable(path)) {
+      console.warn(`USB device not available: ${path}`);
+      return;
+    }
+
     this.port = new serialport.SerialPort({ 
       path,
       baudRate,
@@ -306,16 +311,26 @@ class USBDevice extends Device {
   );}
   
   write(data, callback) {
+    if (!this.port) return;
+
     super.write(data, callback);
     this.port.write(data, callback);
   }
 
   close() {
+    if (!this.port) return;
+
     this.removeAllListeners();
     this.port.removeAllListeners();
     this.port.close();
     this.isOpen = false;
   }
+
+  _isSerialAvailable(path) {
+    serialport.SerialPort.list().then(ports => {
+      return !!ports.find(port => port.path === path);
+    }
+  );}
 }
 
 class NetworkDevice extends Device {
