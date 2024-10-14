@@ -1,8 +1,11 @@
+import PanelStyles from './styles.js';
+
 export default class Panel {
-  constructor( address, width, height) {
+  constructor( address, width, height, style = PanelStyles.dot) {
     this.address = address;
     this.width = width;
     this.height = height;
+    this.style = style;
   }
 
   get _contentDefault()  {
@@ -11,6 +14,14 @@ export default class Panel {
 
   setContent(content) {
     this.content = content
+  }
+
+  isSegment() {
+    return this.style === PanelStyles.segment
+  }
+
+  isDot() {
+    return this.style === PanelStyles.dot
   }
 
   getSerialFormat(options) {

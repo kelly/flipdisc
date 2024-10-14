@@ -1,6 +1,6 @@
 # flipdisc
 
-A javascript library for flipdot and flipdisc displays.
+A javascript library for flipdot, flipdisc, and flipdigit displays.
 
 ![panel](https://github.com/kelly/flipdisc/assets/36345/d047c0b2-4fda-4fbf-9702-5808e23f5a3f)
 
@@ -30,7 +30,7 @@ display.send(frameData)
 
 ```js
 
-import { createDisplay } from 'flipdisc' 
+import { createDisplay, Panels } from 'flipdisc' 
 
 // layout as a 2D array of panel addresses
 const layout = [[1, 3, 5], [2, 4, 6]]
@@ -59,10 +59,16 @@ const opt = {
   panel: {
     width: 28,
     height: 7,
-    type: 'AlfaZeta' // or 'Hanover'
+    type: Panels.AlfaZetaPanel
   }
-
 }
+
+// or flipdigit
+const opt = {
+  panel: Panels.AlfaZetaSegmentPanel
+}
+
+
 const display = createDisplay(layout, dev, opt)
 ```
 
@@ -100,3 +106,9 @@ display.info
 
 - RS485 serial device. e.g. [USB to RS485] (https://a.co/d/7IHOosr) or [Ethernet to RS485] (https://a.co/d/1TIwvfq)
 - A flipdisc panel. Currently [AlfaZeta panels](https://flipdots.com/en/home/) and [Hanover panels](https://www.hanoverdisplays.com/) supported. [Reach out](http://x.com/korevec) if you want me to support your panel.
+
+
+### Works With
+
+- [flipdigit server](https://github.com/kelly/flipdisc-server) draw elaborate visualizations on your flipdisc
+- [flipdot iOS app](https://apps.apple.com/us/app/flipdisc/id6504055618) control your flipdisc from iOS

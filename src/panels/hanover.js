@@ -1,3 +1,4 @@
+import PanelStyles from './styles.js';
 import Panel from './panel.js'
 
 const START_BYTES= [0x02]
@@ -7,8 +8,8 @@ const PANEL_HEIGHT_DEFAULT = 7
 
 export default class HanoverPanel extends Panel {
 
-  constructor( address, width, height ) {
-    super(address, width || PANEL_WIDTH_DEFAULT, height || PANEL_HEIGHT_DEFAULT) 
+  constructor( address, width = PANEL_WIDTH_DEFAULT, height = PANEL_HEIGHT_DEFAULT) {
+    super(address, width, height, PanelStyles.dot) 
   }
 
   // this is ridiculous, but apparently it's part of the format: https://engineer.john-whittington.co.uk/2017/11/adventures-flippy-flip-dot-display/

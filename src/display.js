@@ -1,6 +1,6 @@
-import * as Utils from './utils.js'
-import * as Panels from './panels/index.js'
-import * as Devices from './devices/index.js'
+import * as Utils from './utils.js';
+import * as Panels from './panels/index.js';
+import * as Devices from './devices/index.js';
 
 const defaults = {
   rotation: 0,
@@ -9,178 +9,248 @@ const defaults = {
   panel: {
     width: 28,
     height: 7,
-    type: 'AlfaZeta'
-  }
-}
+    type: Panels.AlfaZetaPanel,
+  },
+};
+
+const MIN_SEND_INTERVAL_MS = 5;
 
 export default class Display {
-
-  constructor(layout, devices, options) {
-    options = { ...defaults, ...options }
+  constructor(layout, devices, options = {}) {
+    options = { ...defaults, ...options };
     this.panels = [];
-    this.devices = []
-    this.rotation = options.rotation,
-    this.isMirrored = options.isMirrored
+    this.devices = [];
+    this.rotation = options.rotation;
+    this.isMirrored = options.isMirrored;
+    this.isInverted = options.isInverted;
     this.lastSendTime = null;
-    this.minSendInterval = 5;
-    this.lastFrameData = [];
-    this.isConnected = false
+    this.minSendInterval = MIN_SEND_INTERVAL_MS;
+    this.lastFrameHash = null;
+    this.isConnected = false;
 
-    if (!devices) 
-      throw new Error("Device Path must not be empty");
-    
+    if (!devices) {
+      throw new Error('Device path must not be empty');
+    }
 
-    if (!layout.length || !layout[0].length) 
-      throw new Error("Panel layout must not be empty");
-    
-    // Example devices:
-    // [ {path: '/dev/cu.usbserial-AB0OJSKG', baudRate: 57600, panels: [1, 2, 3, 4]}, 
-    //   {path: '/dev/cu.usbserial-AB0OJSKF', baudRate: 57600, panels: [5, 6, 7, 8]}]
-    // or
-    // '/dev/cu.usbserial-AB0OJSKG' a string path
+    if (!layout.length || !layout[0].length) {
+      throw new Error('Panel layout must not be empty');
+    }
+
     this._initPanels(layout, options.panel);
-    this._initDevices(devices)
+    this._initDevices(devices);
   }
 
   _initDevices(devices) {
-    devices = (devices.constructor !== Array) ? [devices] : devices
-    devices.forEach(args => {
-      this._initDevice(args)
-    })
+    if (!Array.isArray(devices)) devices = [devices];
+
+    devices.forEach((args) => {
+      this._initDevice(args);
+    });
   }
 
   _initDevice(args) {
-    if (args.constructor === String) {
+    if (typeof args === 'string') {
       args = {
         path: args,
-        addresses: this.allPanelAddresses
-      }
+        addresses: this.allPanelAddresses,
+      };
     }
 
-    const Device = Devices.deviceForInput(args.path)
-    const device = new Device(args.path, args.addresses, args.baudRate)
-    device.open(() => this._setConnected())
+    const Device = Devices.deviceForInput(args.path);
+    const device = new Device(args.path, args.addresses, args.baudRate);
+    device.open(() => this._setConnected());
 
-    this.devices.push(device)
+    this.devices.push(device);
   }
 
-  _setConnected() { 
-    this.isConnected = true
+  _setConnected() {
+    this.isConnected = true;
     process.once('exit', () => {
-      this._closeDevices()
-      process.removeAllListeners('exit')
-    })
+      this._closeDevices();
+    });
   }
 
   _closeDevices() {
-    this.devices.forEach(device => {
-      device.removeAllListeners()
-      device.close()
-    })
+    this.devices.forEach((device) => {
+      device.removeAllListeners();
+      device.close();
+    });
   }
 
   _initPanels(layout, options) {
     const { width, height, type } = options;
-    const Panel = Panels.panelForType(type)
 
-    layout.forEach(row => {
-      let rows = [];
+    const Panel = (options.prototype instanceof Panels.Panel) ? options : type || Panels.AlfaZetaPanel;
 
-      row.forEach(address => {
-        rows.push(new Panel(address, width, height));
-      });
-
-      this.panels = this.panels === null ? [rows] : this.panels.concat([rows]);
-    });
+    this.panels = layout.map((row) =>
+      row.map((address) => new Panel(address, width, height))
+    );
   }
 
-  setInverted(frameData) {
-    this.isInverted = !this.isInverted;
-    // invert stale data
+  setInverted(isInverted) {
+    this.isInverted = isInverted;
   }
 
   _invert(frameData) {
-    return frameData.map(row => row.map(pixel => 1 - pixel));
+    return frameData.map((row) => row.map((pixel) => 1 - pixel));
   }
 
   _mirror(frameData) {
-    const mirrored = [];
-
-    for (let i = 0; i < frameData.length; i++) {
-      mirrored.push(frameData[i].slice().reverse());
-    }
-
-    return mirrored;
+    return frameData.map((row) => row.slice().reverse());
   }
 
   _rotate(frameData, degrees) {
+    const rotations = (degrees % 360) / 90;
+    if (rotations === 0) return frameData;
+
+    let rotatedData = frameData;
+    for (let i = 0; i < rotations; i++) {
+      rotatedData = this._rotate90(rotatedData);
+    }
+
+    return rotatedData;
+  }
+
+  _rotate90(frameData) {
     const rows = frameData.length;
     const cols = frameData[0].length;
-
-    const rotate = (row, col, angle) => {
-      switch (angle) {
-        case 90:
-          return [col, rows - 1 - row];
-        case 180:
-          return [rows - 1 - row, cols - 1 - col];
-        case 270:
-          return [cols - 1 - col, row];
-        default:
-          return [row, col]; // No rotation
-      }
-    };
-
     const rotated = [];
-    for (let i = 0; i < rows; i++) {
-      rotated.push([]);
-      for (let j = 0; j < cols; j++) {
-        const [newRow, newCol] = rotate(i, j, degrees % 360);
-        rotated[i].push(frameData[newRow][newCol]);
+
+    for (let col = 0; col < cols; col++) {
+      const newRow = [];
+      for (let row = rows - 1; row >= 0; row--) {
+        newRow.push(frameData[row][col]);
       }
+      rotated.push(newRow);
     }
     return rotated;
   }
 
   _formatOrientation(frameData) {
-    if (this.rotation != 0) 
-      frameData = this._rotate(frameData, this.rotation)
-    
-    if (this.isMirrored) 
-      frameData = this._mirror(frameData)
+    if (this.rotation !== 0) {
+      frameData = this._rotate(frameData, this.rotation);
+    }
 
-    if (this.isInverted) 
-      frameData = this._invert(frameData)
+    if (this.isMirrored) {
+      frameData = this._mirror(frameData);
+    }
 
-    return frameData
+    if (this.isInverted) {
+      frameData = this._invert(frameData);
+    }
+
+    return frameData;
+  }
+
+  _loopPanels(callback) {
+    this.panels.forEach((row, r) => {
+      row.forEach((panel, c) => {
+        callback(panel, r, c);
+      });
+    });
   }
 
   _formatSerialData(frameData, addresses, flush) {
-    let serialData = new Uint8Array()
-    frameData = this._formatOrientation(frameData)
-    const panelWidth = this._basePanel.width
-    const panelHeight = this._basePanel.height
-    const rows = this.rows
-    const cols = this.cols
+    let serialData = new Uint8Array();
+    frameData = this._formatFrameData(frameData);
 
-    for (let r = 0; r < rows; r++) {
-      const row = this.panels[r];
-      for (let c = 0; c < cols; c++) {
-        const panel = row[c];
-        const panelData = frameData.slice(r * panelHeight, (r + 1) * panelHeight)
-          .map(row => row.slice(c * panelWidth, (c + 1) * panelWidth));
+    this._loopPanels((panel, r, c) => {
+      const panelData = this._parsePanelData(frameData, r, c);
 
-        if (addresses.indexOf(row[c].address) !== -1) {
-          // add to serial data if address is in the list
-          panel.setContent(panelData);
-          serialData = Utils.concatTypedArrays(serialData, panel.getSerialFormat(flush))
-        }
+      if (addresses.includes(panel.address)) {
+        panel.setContent(panelData);
+        serialData = Utils.concatTypedArrays(
+          serialData,
+          panel.getSerialFormat(flush)
+        );
       }
-    }
+    });
+
     return serialData;
   }
 
+  _formatSerialSegmentData(frameData, addresses, flush) {
+    let serialData = new Uint8Array();
+
+    const verticalSize = this._segmentDisplayVerticalSize;
+    const horizontalSize = this._segmentDisplayHorizontalSize;
+
+    const verticalFrameData = this._formatFrameData(
+      frameData,
+      verticalSize.width,
+      verticalSize.height
+    );
+    const horizontalFrameData = this._formatFrameData(
+      frameData,
+      horizontalSize.width,
+      horizontalSize.height
+    );
+
+    this._loopPanels((panel, r, c) => {
+      const verticalPanelData = this._parsePanelData(
+        verticalFrameData,
+        r,
+        c,
+        panel.verticalContentSize
+      );
+      const horizontalPanelData = this._parsePanelData(
+        horizontalFrameData,
+        r,
+        c,
+        panel.horizontalContentSize
+      );
+
+      if (addresses.includes(panel.address)) {
+        panel.setVerticalContent(verticalPanelData);
+        panel.setHorizontalContent(horizontalPanelData);
+        serialData = Utils.concatTypedArrays(
+          serialData,
+          panel.getSerialFormat(flush)
+        );
+      }
+    });
+
+    return serialData;
+  }
+
+  _parsePanelData(frameData, r, c, size = { width: this.panelWidth, height: this.panelHeight }) {
+    const { width, height } = size;
+    return frameData
+      .slice(r * height, (r + 1) * height)
+      .map((row) => row.slice(c * width, (c + 1) * width))
+  }
+
+  _formatFrameData(frameData, width = this.width, height = this.height) {
+    const resized = Utils.resizeImageData(
+      frameData,
+      this.width,
+      this.height,
+      width,
+      height
+    );
+    const formatted = Utils.formatRGBAPixels(resized, width, height);
+
+    return this._formatOrientation(formatted);
+  }
+
+  get _segmentDisplayVerticalSize() {
+    const { width, height } = this._basePanel.verticalContentSize;
+    return {
+      width: width * this.cols,
+      height: height * this.rows,
+    };
+  }
+
+  get _segmentDisplayHorizontalSize() {
+    const { width, height } = this._basePanel.horizontalContentSize;
+    return {
+      width: width * this.cols,
+      height: height * this.rows,
+    };
+  }
+
   get _basePanel() {
-    return this.panels[0][0]
+    return this.panels[0][0];
   }
 
   get width() {
@@ -196,30 +266,35 @@ export default class Display {
   }
 
   get panelContent() {
-    return this.panels.map(row => row.map(panel => panel.content))
+    return this.panels.map((row) => row.map((panel) => panel.content));
   }
 
   get content() {
     const content = [];
-    this.panels.forEach(row => {
-      const rowData = row.map(panel => panel.content);
+
+    for (let r = 0; r < this.rows; r++) {
       for (let i = 0; i < this.panelHeight; i++) {
-        content.push(rowData.map(panel => panel[i]).flat());
+        const rowContent = [];
+        for (let c = 0; c < this.cols; c++) {
+          rowContent.push(...this.panels[r][c].content[i]);
+        }
+        content.push(rowContent);
       }
-    });
+    }
+
     return this._formatOrientation(content);
   }
 
   get allPanelAddresses() {
-    return this.panels.flat().map(panel => panel.address)
+    return this.panels.flat().map((panel) => panel.address);
   }
 
   get panelWidth() {
-    return this._basePanel.width;
+    return this._basePanel.virtualWidth || this._basePanel.width;
   }
 
   get panelHeight() {
-    return this._basePanel.height;
+    return this._basePanel.virtualHeight || this._basePanel.height;
   }
 
   get rows() {
@@ -231,8 +306,18 @@ export default class Display {
   }
 
   get info() {
-    const { width, height, rotation, isMirrored, isInverted, 
-      content, panelWidth, panelHeight, isConnected, lastSendTime } = this;
+    const {
+      width,
+      height,
+      rotation,
+      isMirrored,
+      isInverted,
+      content,
+      panelWidth,
+      panelHeight,
+      isConnected,
+      lastSendTime,
+    } = this;
     return {
       width,
       height,
@@ -244,44 +329,53 @@ export default class Display {
       lastSendTime,
       isConnected,
       content,
-    }
-  }
-
-  sendImageData(imageData) {
-    const pixels = Utils.formatRGBAPixels(imageData)
-    this.send(pixels)
+    };
   }
 
   _sendToDevice(device, frameData, flush) {
-    const serialData = this._formatSerialData(frameData, device.addresses, flush = true)
-    device.write(serialData, function(err) {
-      if (err) 
-        return console.log('Error on write: ', err.message)      
-    })
+    if (!Utils.isImageData(frameData)) {
+      frameData = Utils.createImageData(frameData, this.width, this.height);
+    }
+
+    const serialData =
+      this._basePanel.isSegment()
+        ? this._formatSerialSegmentData(frameData, device.addresses, flush)
+        : this._formatSerialData(frameData, device.addresses, flush);
+
+    device.write(serialData, (err) => {
+      if (err) console.warn('Error on write:', err.message);
+    });
   }
- 
-  send(frameData, flush) {
-    if (this.devices.length === 0) 
-      throw new Error('no serial ports available')
-    
-    if (frameData?.length !== this.height || frameData[0]?.length !== this.width) 
-      throw new Error('frame data does not match display dimensions')
-    
-    if (Utils.areArraysEqual(frameData, this.lastFrameData)) 
+
+  send(frameData, flush = true) {
+    if (this.devices.length === 0) {
+      throw new Error('No serial ports available');
+    }
+
+    if (
+      !Array.isArray(frameData) ||
+      frameData.length !== this.height ||
+      !Array.isArray(frameData[0]) ||
+      frameData[0].length !== this.width
+    ) {
+      throw new Error('Source frame data does not match display dimensions');
+    }
+
+    const currentFrameHash = Utils.hashFrameData(frameData);
+    if (currentFrameHash === this.lastFrameHash) {
       return;
+    }
 
-    if (Utils.isImageData(frameData)) 
-      frameData = Utils.formatRGBAPixels(frameData)
+    const now = Date.now();
+    if (this.lastSendTime && now - this.lastSendTime < this.minSendInterval) {
+      console.warn('Rendering too quickly. You might be calling render incorrectly');
+    }
 
-    if (this.lastSendTime && ((Date.now() - this.lastSendTime) < this.minSendInterval)) 
-      console.warn('rendering too quickly. you might be calling render incorrectly')
+    this.lastSendTime = now;
+    this.lastFrameHash = currentFrameHash;
 
-
-    this.lastSendTime = Date.now();
-    this.lastFrameData = frameData;
-    
-    this.devices.forEach(device => {
-      this._sendToDevice(device, frameData, flush)
-    })
+    this.devices.forEach((device) => {
+      this._sendToDevice(device, frameData, flush);
+    });
   }
 }

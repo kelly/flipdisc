@@ -52,7 +52,7 @@ export default class USBDevice extends Device {
   }
 
   _isSerialAvailable(path) {
-    SerialPort.list().then(ports => {
+    return SerialPort.list().then(ports => {
       return !!ports.find(port => port.path === path);
     }
   )}

@@ -1,6 +1,6 @@
 {
   "name": "flipdisc",
-  "version": "0.0.8",
+  "version": "0.0.9",
   "description": "a javascript library for flipdot and flipdisc displays",
   "type": "module",
   "exports": {
@@ -25,6 +25,7 @@
   "license": "BSD-3-Clause-Attribution",
   "dependencies": {
     "connection-string": "^4.4.0",
+    "crypto": "^1.0.1",
     "serialport": "^12.0.0"
   }
 }

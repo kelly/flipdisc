@@ -1,3 +1,14 @@
+import crypto from 'crypto';
+
+function hashFrameData(frameData) {
+  const flatData = frameData.flat();
+  const buffer = Buffer.from(flatData);
+  const hash = crypto.createHash('md5').update(buffer).digest('hex');
+
+  return hash;
+}
+
+
 function concatTypedArrays(a, b) { // a, b TypedArray of same type
   var c = new (a.constructor)(a.length + b.length);
   c.set(a, 0);
@@ -64,15 +75,15 @@ function mergeFrames(frameDatas, mergeStrategy = 'invert') {
   const numRows = frameDatas[0].length;
   const numCols = frameDatas[0][0].length;
   return Array.from({ length: numRows }, (_, i) => {
-      return Array.from({ length: numCols }, (_, j) => {
-          return frameDatas.reduce((acc, frameData) => {
-              if (mergeStrategy === 'invert') {
-                  return acc ^ frameData[i][j];
-              } else {
-                  return acc | frameData[i][j];
-              }
-          }, 0);
-      });
+    return Array.from({ length: numCols }, (_, j) => {
+      return frameDatas.reduce((acc, frameData) => {
+        if (mergeStrategy === 'invert') {
+          return acc ^ frameData[i][j];
+        } else {
+          return acc | frameData[i][j];
+        }
+      }, 0);
+    });
   });
 }
 
@@ -83,10 +94,47 @@ function getLuminanceRGB(r, g, b) {
   return luminance < 0.5 ? 0 : 1;
 }
 
-function formatRGBAPixels(imageData) {
-  const pixelArray = new Array(this.height)
-  const width = this.width
-  const height = this.height
+function createImageData(data, width, height) {
+  // convert an array from  [[1, 1, 1, 1], [0, 1, 0, 1]] to RGBA format
+  const imageData = new Uint8ClampedArray(width * height * 4); // Output RGBA array
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const i = (y * width + x) * 4;
+      const value = data[y][x] * 255;
+      imageData[i] = value;       // Red
+      imageData[i + 1] = value; // Green
+      imageData[i + 2] = value; // Blue
+      imageData[i + 3] = 255; // Alpha
+    }
+  }     
+  return imageData;
+}
+
+function resizeImageData(imageData, width, height, newWidth, newHeight) {
+  const resizedData = new Uint8ClampedArray(newWidth * newHeight * 4); // Output RGBA array
+  const xRatio = width / newWidth;
+  const yRatio = height / newHeight;
+
+  for (let y = 0; y < newHeight; y++) {
+    for (let x = 0; x < newWidth; x++) {
+      const nearestX = Math.floor(x * xRatio);
+      const nearestY = Math.floor(y * yRatio);
+      const index = (y * newWidth + x) * 4;
+      const nearestIndex = (nearestY * width + nearestX) * 4;
+
+      // Copy RGBA values
+      resizedData[index] = imageData[nearestIndex];       // Red
+      resizedData[index + 1] = imageData[nearestIndex + 1]; // Green
+      resizedData[index + 2] = imageData[nearestIndex + 2]; // Blue
+      resizedData[index + 3] = imageData[nearestIndex + 3]; // Alpha
+    }
+  }
+
+  return Array.from(resizedData); 
+}
+
+function formatRGBAPixels(imageData, width, height) {
+  const pixelArray = new Array(height)
 
   for (let y = 0; y < height; y++) {
     const row = new Array(width);
@@ -114,4 +162,5 @@ function isEmptyArray(arr) {
 }
 
 
-export { concatTypedArrays, packBits, reverseBits, sleep, mergeFrames, areArraysEqual, formatRGBAPixels, isImageData, isEmptyArray }
+export { concatTypedArrays, packBits, reverseBits, sleep, mergeFrames, areArraysEqual, 
+        formatRGBAPixels, isImageData, isEmptyArray, resizeImageData, createImageData, hashFrameData }
