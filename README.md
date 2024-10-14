@@ -1,10 +1,10 @@
 # flipdisc
 
-A javascript library for flipdot, flipdisc, and flipdigit displays.
+A javascript library for flip dot, flip disc, and flip digit displays.
 
 ![panel](https://github.com/kelly/flipdisc/assets/36345/d047c0b2-4fda-4fbf-9702-5808e23f5a3f)
 
-- [Website](https://flipdisc.io/)
+- [flip disc website](https://flipdisc.io/)
 - [Github](http://www.github.com/kelly/flipdisc)
 - [NPM](https://www.npmjs.com/package/flipdisc)
 
