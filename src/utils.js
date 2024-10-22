@@ -8,7 +8,6 @@ function hashFrameData(frameData) {
   return hash;
 }
 
-
 function concatTypedArrays(a, b) { // a, b TypedArray of same type
   var c = new (a.constructor)(a.length + b.length);
   c.set(a, 0);
@@ -111,6 +110,10 @@ function createImageData(data, width, height) {
 }
 
 function resizeImageData(imageData, width, height, newWidth, newHeight) {
+  if (width === newWidth && height === newHeight) {
+    return imageData
+  }
+  
   const resizedData = new Uint8ClampedArray(newWidth * newHeight * 4); // Output RGBA array
   const xRatio = width / newWidth;
   const yRatio = height / newHeight;

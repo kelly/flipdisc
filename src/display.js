@@ -100,22 +100,22 @@ export default class Display {
   }
 
   _rotate(frameData, degrees) {
-    const rotations = (degrees % 360) / 90;
-    if (rotations === 0) return frameData;
-
-    let rotatedData = frameData;
-    for (let i = 0; i < rotations; i++) {
-      rotatedData = this._rotate90(rotatedData);
+    degrees = degrees % 360;
+    if (degrees === 0) {
+      return frameData;
     }
-
-    return rotatedData;
+    const times = (degrees / 90) % 4;
+    let rotated = frameData;
+    for (let i = 0; i < times; i++) {
+      rotated = this._rotate90(rotated);
+    }
+    return rotated;
   }
-
+  
   _rotate90(frameData) {
     const rows = frameData.length;
     const cols = frameData[0].length;
     const rotated = [];
-
     for (let col = 0; col < cols; col++) {
       const newRow = [];
       for (let row = rows - 1; row >= 0; row--) {
@@ -228,8 +228,7 @@ export default class Display {
       width,
       height
     );
-    const formatted = Utils.formatRGBAPixels(resized, width, height);
-
+    const formatted =  Utils.formatRGBAPixels(resized, this.width, this.height);
     return this._formatOrientation(formatted);
   }
 
@@ -253,12 +252,20 @@ export default class Display {
     return this.panels[0][0];
   }
 
-  get width() {
+  get deviceWidth() { 
     return this.panelWidth * this.cols;
   }
 
-  get height() {
+  get deviceHeight() {
     return this.panelHeight * this.rows;
+  }
+
+  get width() {
+    return this.isRotated90 ? this.deviceHeight : this.deviceWidth;
+  }
+
+  get height() {
+    return this.isRotated90 ? this.deviceWidth : this.deviceHeight;
   }
 
   get aspect() {
@@ -295,6 +302,10 @@ export default class Display {
 
   get panelHeight() {
     return this._basePanel.virtualHeight || this._basePanel.height;
+  }
+
+  get isRotated90() {
+    return this.rotation === 90 || this.rotation === 270;
   }
 
   get rows() {
@@ -352,11 +363,12 @@ export default class Display {
       throw new Error('No serial ports available');
     }
 
+    // has to match the display dimensions normal, or rotated
     if (
       !Array.isArray(frameData) ||
-      frameData.length !== this.height ||
+      frameData.length !== (this.height || this.width ) ||
       !Array.isArray(frameData[0]) ||
-      frameData[0].length !== this.width
+      frameData[0].length !== (this.width || this.height)
     ) {
       throw new Error('Source frame data does not match display dimensions');
     }
