@@ -15,7 +15,6 @@ function hashFrameData(frameData) {
   return hash;
 }
 
-
 function concatTypedArrays(a, b) { // a, b TypedArray of same type
   var c = new (a.constructor)(a.length + b.length);
   c.set(a, 0);
@@ -118,6 +117,10 @@ function createImageData(data, width, height) {
 }
 
 function resizeImageData(imageData, width, height, newWidth, newHeight) {
+  if (width === newWidth && height === newHeight) {
+    return imageData
+  }
+  
   const resizedData = new Uint8ClampedArray(newWidth * newHeight * 4); // Output RGBA array
   const xRatio = width / newWidth;
   const yRatio = height / newHeight;
@@ -184,13 +187,13 @@ var utils = /*#__PURE__*/Object.freeze({
   sleep: sleep
 });
 
-const PanelStyles$1 = {
+const PanelStyles = {
   dot: 'dot',
   segment: 'segment'
 };
 
 class Panel {
-  constructor( address, width, height, style = PanelStyles$1.dot) {
+  constructor( address, width, height, style = PanelStyles.dot) {
     this.address = address;
     this.width = width;
     this.height = height;
@@ -206,11 +209,11 @@ class Panel {
   }
 
   isSegment() {
-    return this.style === PanelStyles$1.segment
+    return this.style === PanelStyles.segment
   }
 
   isDot() {
-    return this.style === PanelStyles$1.dot
+    return this.style === PanelStyles.dot
   }
 
   getSerialFormat(options) {
@@ -226,7 +229,7 @@ const PANEL_WIDTH_DEFAULT$2 = 28;
 const PANEL_HEIGHT_DEFAULT$2 = 7;
 
 class AlfaZetaPanel extends Panel {
-  constructor( address, width = PANEL_WIDTH_DEFAULT$2, height = PANEL_HEIGHT_DEFAULT$2, style = PanelStyles$1.dot) {  
+  constructor( address, width = PANEL_WIDTH_DEFAULT$2, height = PANEL_HEIGHT_DEFAULT$2, style = PanelStyles.dot) {  
     super(address, width, height, style); 
   }
 
@@ -259,7 +262,7 @@ const PANEL_HEIGHT_DEFAULT$1 = 7;
 class HanoverPanel extends Panel {
 
   constructor( address, width = PANEL_WIDTH_DEFAULT$1, height = PANEL_HEIGHT_DEFAULT$1) {
-    super(address, width, height, PanelStyles$1.dot); 
+    super(address, width, height, PanelStyles.dot); 
   }
 
   // this is ridiculous, but apparently it's part of the format: https://engineer.john-whittington.co.uk/2017/11/adventures-flippy-flip-dot-display/
@@ -406,7 +409,7 @@ var index = /*#__PURE__*/Object.freeze({
   AlfaZetaSegmentPanel: AlfaZetaSegmentPanel,
   HanoverPanel: HanoverPanel,
   Panel: Panel,
-  PanelStyles: PanelStyles$1
+  PanelStyles: PanelStyles
 });
 
 class Device extends EventEmitter {
@@ -448,37 +451,64 @@ class Device extends EventEmitter {
 const BAUD_RATE_DEFAULT = 57600;
 
 class USBDevice extends Device {
+  static devices = [];
+  static exitHandlersSet = false;
 
   constructor(path, addresses, baudRate) {
     super(path, addresses);
     this.baudRate = baudRate || BAUD_RATE_DEFAULT;
     this.autoOpen = true;
+    this.isOpen = false;
+
+    USBDevice.devices.push(this);
+    USBDevice.setupExitHandlers();
+  }
+
+  static setupExitHandlers() {
+    if (USBDevice.exitHandlersSet) return; 
+    USBDevice.exitHandlersSet = true;
+
+    const exitHandler = () => {
+      console.log('Received exit signal, closing USB devices.');
+      USBDevice.devices.forEach((device) => device.close());
+      process.exit();
+    };
+
+    process.on('SIGINT', exitHandler);
+    process.on('SIGTERM', exitHandler);
   }
 
   open(callback) {
     const { path, baudRate, autoOpen } = this;
 
-    if (!this._isSerialAvailable(path)) {
-      console.warn(`USB device not available: ${path}`);
-      return;
-    }
-
-    this.port = new serialport.SerialPort({ 
-      path,
-      baudRate,
-      autoOpen
-    }, (err) => {
-      if (err) {
-        throw new Error(err)
-      } else {
-        console.log(`opened USB device: ${this.path} baud rate: ${this.baudRate}`);
-        this.isOpen = true;
-        this.emit('open');
-        callback();
+    this._isSerialAvailable(path).then((available) => {
+      if (!available) {
+        console.warn(`USB device not available: ${path}`);
+        return;
       }
-    }
-  );}
-  
+
+      this.port = new serialport.SerialPort(
+        {
+          path,
+          baudRate,
+          autoOpen,
+        },
+        (err) => {
+          if (err) {
+            throw new Error(err);
+          } else {
+            console.log(
+              `Opened USB device: ${this.path} baud rate: ${this.baudRate}`
+            );
+            this.isOpen = true;
+            this.emit('open');
+            if (callback) callback();
+          }
+        }
+      );
+    });
+  }
+
   write(data, callback) {
     if (!this.port) return;
 
@@ -487,19 +517,32 @@ class USBDevice extends Device {
   }
 
   close() {
-    if (!this.port) return;
+    if (!this.port || !this.isOpen) return;
 
     this.removeAllListeners();
     this.port.removeAllListeners();
-    this.port.close();
-    this.isOpen = false;
+
+    this.port.close((err) => {
+      if (err) {
+        console.error('Error closing port:', err);
+      } else {
+        console.log('Serial port closed.');
+      }
+      this.isOpen = false;
+
+      // Remove this device from the devices array
+      const index = USBDevice.devices.indexOf(this);
+      if (index > -1) {
+        USBDevice.devices.splice(index, 1);
+      }
+    });
   }
 
   _isSerialAvailable(path) {
-    return serialport.SerialPort.list().then(ports => {
-      return !!ports.find(port => port.path === path);
-    }
-  )}
+    return serialport.SerialPort.list().then((ports) => {
+      return !!ports.find((port) => port.path === path);
+    });
+  }
 }
 
 class NetworkDevice extends Device {
@@ -651,22 +694,22 @@ class Display {
   }
 
   _rotate(frameData, degrees) {
-    const rotations = (degrees % 360) / 90;
-    if (rotations === 0) return frameData;
-
-    let rotatedData = frameData;
-    for (let i = 0; i < rotations; i++) {
-      rotatedData = this._rotate90(rotatedData);
+    degrees = degrees % 360;
+    if (degrees === 0) {
+      return frameData;
     }
-
-    return rotatedData;
+    const times = (degrees / 90) % 4;
+    let rotated = frameData;
+    for (let i = 0; i < times; i++) {
+      rotated = this._rotate90(rotated);
+    }
+    return rotated;
   }
-
+  
   _rotate90(frameData) {
     const rows = frameData.length;
     const cols = frameData[0].length;
     const rotated = [];
-
     for (let col = 0; col < cols; col++) {
       const newRow = [];
       for (let row = rows - 1; row >= 0; row--) {
@@ -779,8 +822,7 @@ class Display {
       width,
       height
     );
-    const formatted = formatRGBAPixels(resized, width, height);
-
+    const formatted =  formatRGBAPixels(resized, this.width, this.height);
     return this._formatOrientation(formatted);
   }
 
@@ -804,12 +846,20 @@ class Display {
     return this.panels[0][0];
   }
 
-  get width() {
+  get deviceWidth() { 
     return this.panelWidth * this.cols;
   }
 
-  get height() {
+  get deviceHeight() {
     return this.panelHeight * this.rows;
+  }
+
+  get width() {
+    return this.isRotated90 ? this.deviceHeight : this.deviceWidth;
+  }
+
+  get height() {
+    return this.isRotated90 ? this.deviceWidth : this.deviceHeight;
   }
 
   get aspect() {
@@ -846,6 +896,10 @@ class Display {
 
   get panelHeight() {
     return this._basePanel.virtualHeight || this._basePanel.height;
+  }
+
+  get isRotated90() {
+    return this.rotation === 90 || this.rotation === 270;
   }
 
   get rows() {
@@ -903,11 +957,12 @@ class Display {
       throw new Error('No serial ports available');
     }
 
+    // has to match the display dimensions normal, or rotated
     if (
       !Array.isArray(frameData) ||
-      frameData.length !== this.height ||
+      frameData.length !== (this.height || this.width ) ||
       !Array.isArray(frameData[0]) ||
-      frameData[0].length !== this.width
+      frameData[0].length !== (this.width || this.height)
     ) {
       throw new Error('Source frame data does not match display dimensions');
     }
