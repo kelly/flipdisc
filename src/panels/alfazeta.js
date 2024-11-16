@@ -12,6 +12,7 @@ const PANEL_HEIGHT_DEFAULT = 7
 export default class AlfaZetaPanel extends Panel {
   constructor( address, width = PANEL_WIDTH_DEFAULT, height = PANEL_HEIGHT_DEFAULT, style = PanelStyles.dot) {  
     super(address, width, height, style) 
+    this._content = new Uint8Array(); 
   }
 
   getSerialFormat(flush) {
