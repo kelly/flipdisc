@@ -283,7 +283,8 @@ export default class Display {
       for (let i = 0; i < this.panelHeight; i++) {
         const rowContent = [];
         for (let c = 0; c < this.cols; c++) {
-          rowContent.push(...this.panels[r][c].content[i]);
+          // we want the non-formatted content here, so we're using _content
+          rowContent.push(...this.panels[r][c]._content[i]);
         }
         content.push(rowContent);
       }
