@@ -193,27 +193,36 @@ const PanelStyles = {
 };
 
 class Panel {
-  constructor( address, width, height, style = PanelStyles.dot) {
+  constructor(address, width, height, style = PanelStyles.dot) {
     this.address = address;
     this.width = width;
     this.height = height;
     this.style = style;
+    this._content = this.defaultContent();
   }
 
-  get _contentDefault()  {
-    return Uint8Array.from({ length: this.height }, () => new Uint8Array(this.width).fill(0))
+  defaultContent() {
+    return Array.from({ length: this.height }, () => new Uint8Array(this.width).fill(0));
   }
 
   setContent(content) {
-    this.content = content;
+    this._content = content;
+  }
+
+  get content() {
+    return this._content;
+  }
+
+  set content(content) {
+    this._content = content;
   }
 
   isSegment() {
-    return this.style === PanelStyles.segment
+    return this.style === PanelStyles.segment;
   }
 
   isDot() {
-    return this.style === PanelStyles.dot
+    return this.style === PanelStyles.dot;
   }
 
   getSerialFormat(options) {
@@ -231,7 +240,6 @@ const PANEL_HEIGHT_DEFAULT$2 = 7;
 class AlfaZetaPanel extends Panel {
   constructor( address, width = PANEL_WIDTH_DEFAULT$2, height = PANEL_HEIGHT_DEFAULT$2, style = PanelStyles.dot) {  
     super(address, width, height, style); 
-    this._content = new Uint8Array(); 
   }
 
   getSerialFormat(flush) {
@@ -244,10 +252,6 @@ class AlfaZetaPanel extends Panel {
       ...END_BYTES$1
     ];
     return Uint8Array.from(serialCommand);
-  }
-
-  set content(content) {
-    this._content = content;
   }
 
   get content() {
@@ -308,6 +312,7 @@ const PANEL_DIGIT_VERTICAL_SIZE = { width: 2, height: 2 };
 const PANEL_DIGIT_HORIZONTAL_SIZE = { width: 1, height: 3 };
 const PANEL_WIDTH_DEFAULT = 7;
 const PANEL_HEIGHT_DEFAULT = 4;
+const PANEL_SEGMENT_COUNT = 7;
 
 ///    6
 /// -------
@@ -329,7 +334,7 @@ const PANEL_SEGMENTS = {
 class AlfaZetaSegmentPanel extends AlfaZetaPanel {
   constructor(address, width = PANEL_WIDTH_DEFAULT, height = PANEL_HEIGHT_DEFAULT) {
     super(address, width, height, PanelStyles.segment);
-    this.segments = Array.from({ length: this.width * this.height }, () => Array(7).fill(0));
+    this._content = Array.from({ length: this.width * this.height }, () => Array(PANEL_SEGMENT_COUNT).fill(0));
   }
 
   // Virtual sizes are needed because each segment is essentially a 2x3 display
@@ -361,9 +366,10 @@ class AlfaZetaSegmentPanel extends AlfaZetaPanel {
     const slicedContent = this._sliceContent(content, digitSize);
     slicedContent.forEach((slice, i) => {
       segmentIndices.forEach((segmentIndex, j) => {
-        this.segments[i][segmentIndex] = slice[j];  
+        this._content[i][segmentIndex] = slice[j];  
       });
     });
+
   }
 
   _sliceContent(content, { width, height }) {
@@ -387,6 +393,11 @@ class AlfaZetaSegmentPanel extends AlfaZetaPanel {
       segment = segment.slice().reverse();
       return parseInt(segment.join(''), 2)
     })
+  }
+
+  get segments() {
+    // an alias for content
+    return this._content;
   }
 
   get horizontalContentSize() {
@@ -823,7 +834,7 @@ class Display {
       width,
       height
     );
-    const formatted =  formatRGBAPixels(resized, this.width, this.height);
+    const formatted =  formatRGBAPixels(resized, width, height);
     return this._formatOrientation(formatted);
   }
 
@@ -878,7 +889,8 @@ class Display {
       for (let i = 0; i < this.panelHeight; i++) {
         const rowContent = [];
         for (let c = 0; c < this.cols; c++) {
-          rowContent.push(...this.panels[r][c].content[i]);
+          // we want the non-formatted content here, so we're using _content
+          rowContent.push(...this.panels[r][c]._content[i]);
         }
         content.push(rowContent);
       }
