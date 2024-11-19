@@ -228,7 +228,7 @@ export default class Display {
       width,
       height
     );
-    const formatted =  Utils.formatRGBAPixels(resized, this.width, this.height);
+    const formatted =  Utils.formatRGBAPixels(resized, width, height);
     return this._formatOrientation(formatted);
   }
 
