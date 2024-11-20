@@ -7,6 +7,8 @@ A javascript library for flip dot, flip disc, and flip digit displays.
 - [flip disc website](https://flipdisc.io/)
 - [Github](http://www.github.com/kelly/flipdisc)
 - [NPM](https://www.npmjs.com/package/flipdisc)
+- [flipdigit server](https://github.com/kelly/flipdisc-server) draw elaborate visualizations on your flipdisc
+- [flipdot iOS app](https://apps.apple.com/us/app/flipdisc/id6504055618) control your flipdisc from iOS
 
 ### Install
 
@@ -108,7 +110,3 @@ display.info
 - A flipdisc panel. Currently [AlfaZeta panels](https://flipdots.com/en/home/) and [Hanover panels](https://www.hanoverdisplays.com/) supported. [Reach out](http://x.com/korevec) if you want me to support your panel.
 
 
-### Works With
-
-- [flipdigit server](https://github.com/kelly/flipdisc-server) draw elaborate visualizations on your flipdisc
-- [flipdot iOS app](https://apps.apple.com/us/app/flipdisc/id6504055618) control your flipdisc from iOS

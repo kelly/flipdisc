@@ -1,6 +1,6 @@
 {
   "name": "flipdisc",
-  "version": "0.0.14",
+  "version": "0.0.15",
   "description": "a javascript library for flipdot and flipdisc displays",
   "type": "module",
   "exports": {
@@ -26,6 +26,7 @@
   "dependencies": {
     "connection-string": "^4.4.0",
     "crypto": "^1.0.1",
+    "flipdisc": "github:kelly/flipdisc",
     "serialport": "^12.0.0"
   }
 }

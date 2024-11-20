@@ -364,14 +364,8 @@ export default class Display {
       throw new Error('No serial ports available');
     }
 
-    // has to match the display dimensions normal, or rotated
-    if (
-      !Array.isArray(frameData) ||
-      frameData.length !== (this.height || this.width ) ||
-      !Array.isArray(frameData[0]) ||
-      frameData[0].length !== (this.width || this.height)
-    ) {
-      throw new Error('Source frame data does not match display dimensions');
+    if (!Array.isArray(frameData)) {
+      throw new Error('Source frame data must be an Array');
     }
 
     const currentFrameHash = Utils.hashFrameData(frameData);
