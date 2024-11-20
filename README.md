@@ -82,9 +82,7 @@ const display = createDisplay(layout, dev, opt)
 // send a single 2D array of frame data. 
 // (0 = not-flipped, 1 = flipped)
 display.send(frameData)
-
-// send imageData from a gl or canvas instance
-display.sendImageData(imageData)
+// also accepts imageData buffer from a gl or canvas instance
 
 // get width
 display.width
