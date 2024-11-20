@@ -971,9 +971,13 @@ class Display {
     }
 
     if (!Array.isArray(frameData)) {
-      throw new Error('Source frame data must be an Array');
+      if (Buffer.isBuffer(frameData)) {
+        frameData = Array.from(new Uint8Array(frameData));
+      } else {
+        throw new Error('Source frame data must be an Array or a Buffer');
+      }
     }
-
+    
     const currentFrameHash = hashFrameData(frameData);
     if (currentFrameHash === this.lastFrameHash) {
       return;
