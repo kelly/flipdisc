@@ -1,6 +1,6 @@
 {
   "name": "flipdisc",
-  "version": "0.0.15",
+  "version": "0.0.16",
   "description": "a javascript library for flipdot and flipdisc displays",
   "type": "module",
   "exports": {

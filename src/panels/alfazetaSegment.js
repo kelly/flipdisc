@@ -26,7 +26,7 @@ const PANEL_SEGMENTS = {
 
 export default class AlfaZetaSegmentPanel extends AlfaZetaPanel {
   constructor(address, width = PANEL_WIDTH_DEFAULT, height = PANEL_HEIGHT_DEFAULT) {
-    super(address, width, height, PanelStyles.segment);
+    super(address, width, height);
     this._content = Array.from({ length: this.width * this.height }, () => Array(PANEL_SEGMENT_COUNT).fill(0));
   }
 
@@ -105,5 +105,9 @@ export default class AlfaZetaSegmentPanel extends AlfaZetaPanel {
       width: PANEL_DIGIT_VERTICAL_SIZE.width * this.width,
       height: PANEL_DIGIT_VERTICAL_SIZE.height * this.height,
     }
+  }
+
+  static get style() {
+    return PanelStyles.segment;
   }
 }

@@ -25,12 +25,8 @@ export default class Panel {
     this._content = content;
   }
 
-  isSegment() {
-    return this.style === PanelStyles.segment;
-  }
-
-  isDot() {
-    return this.style === PanelStyles.dot;
+  static get style() {
+    return PanelStyles.segment;
   }
 
   getSerialFormat(options) {

@@ -217,12 +217,8 @@ class Panel {
     this._content = content;
   }
 
-  isSegment() {
-    return this.style === PanelStyles.segment;
-  }
-
-  isDot() {
-    return this.style === PanelStyles.dot;
+  static get style() {
+    return PanelStyles.segment;
   }
 
   getSerialFormat(options) {
@@ -238,8 +234,8 @@ const PANEL_WIDTH_DEFAULT$2 = 28;
 const PANEL_HEIGHT_DEFAULT$2 = 7;
 
 class AlfaZetaPanel extends Panel {
-  constructor( address, width = PANEL_WIDTH_DEFAULT$2, height = PANEL_HEIGHT_DEFAULT$2, style = PanelStyles.dot) {  
-    super(address, width, height, style); 
+  constructor( address, width = PANEL_WIDTH_DEFAULT$2, height = PANEL_HEIGHT_DEFAULT$2) {  
+    super(address, width, height); 
   }
 
   getSerialFormat(flush) {
@@ -333,7 +329,7 @@ const PANEL_SEGMENTS = {
 
 class AlfaZetaSegmentPanel extends AlfaZetaPanel {
   constructor(address, width = PANEL_WIDTH_DEFAULT, height = PANEL_HEIGHT_DEFAULT) {
-    super(address, width, height, PanelStyles.segment);
+    super(address, width, height);
     this._content = Array.from({ length: this.width * this.height }, () => Array(PANEL_SEGMENT_COUNT).fill(0));
   }
 
@@ -412,6 +408,10 @@ class AlfaZetaSegmentPanel extends AlfaZetaPanel {
       width: PANEL_DIGIT_VERTICAL_SIZE.width * this.width,
       height: PANEL_DIGIT_VERTICAL_SIZE.height * this.height,
     }
+  }
+
+  static get style() {
+    return PanelStyles.segment;
   }
 }
 
@@ -686,7 +686,7 @@ class Display {
   _initPanels(layout, options) {
     const { width, height, type } = options;
 
-    const Panel$1 = (options.prototype instanceof Panel) ? options : type || AlfaZetaPanel;
+    const Panel$1 = options.prototype instanceof Panel ? options : type || AlfaZetaPanel;
 
     this.panels = layout.map((row) =>
       row.map((address) => new Panel$1(address, width, height))
@@ -717,7 +717,7 @@ class Display {
     }
     return rotated;
   }
-  
+
   _rotate90(frameData) {
     const rows = frameData.length;
     const cols = frameData[0].length;
@@ -775,55 +775,11 @@ class Display {
     return serialData;
   }
 
-  _formatSerialSegmentData(frameData, addresses, flush) {
-    let serialData = new Uint8Array();
-
-    const verticalSize = this._segmentDisplayVerticalSize;
-    const horizontalSize = this._segmentDisplayHorizontalSize;
-
-    const verticalFrameData = this._formatFrameData(
-      frameData,
-      verticalSize.width,
-      verticalSize.height
-    );
-    const horizontalFrameData = this._formatFrameData(
-      frameData,
-      horizontalSize.width,
-      horizontalSize.height
-    );
-
-    this._loopPanels((panel, r, c) => {
-      const verticalPanelData = this._parsePanelData(
-        verticalFrameData,
-        r,
-        c,
-        panel.verticalContentSize
-      );
-      const horizontalPanelData = this._parsePanelData(
-        horizontalFrameData,
-        r,
-        c,
-        panel.horizontalContentSize
-      );
-
-      if (addresses.includes(panel.address)) {
-        panel.setVerticalContent(verticalPanelData);
-        panel.setHorizontalContent(horizontalPanelData);
-        serialData = concatTypedArrays(
-          serialData,
-          panel.getSerialFormat(flush)
-        );
-      }
-    });
-
-    return serialData;
-  }
-
   _parsePanelData(frameData, r, c, size = { width: this.panelWidth, height: this.panelHeight }) {
     const { width, height } = size;
     return frameData
       .slice(r * height, (r + 1) * height)
-      .map((row) => row.slice(c * width, (c + 1) * width))
+      .map((row) => row.slice(c * width, (c + 1) * width));
   }
 
   _formatFrameData(frameData, width = this.width, height = this.height) {
@@ -834,31 +790,15 @@ class Display {
       width,
       height
     );
-    const formatted =  formatRGBAPixels(resized, width, height);
+    const formatted = formatRGBAPixels(resized, width, height);
     return this._formatOrientation(formatted);
-  }
-
-  get _segmentDisplayVerticalSize() {
-    const { width, height } = this._basePanel.verticalContentSize;
-    return {
-      width: width * this.cols,
-      height: height * this.rows,
-    };
-  }
-
-  get _segmentDisplayHorizontalSize() {
-    const { width, height } = this._basePanel.horizontalContentSize;
-    return {
-      width: width * this.cols,
-      height: height * this.rows,
-    };
   }
 
   get _basePanel() {
     return this.panels[0][0];
   }
 
-  get deviceWidth() { 
+  get deviceWidth() {
     return this.panelWidth * this.cols;
   }
 
@@ -955,21 +895,14 @@ class Display {
       frameData = createImageData(frameData, this.width, this.height);
     }
 
-    const serialData =
-      this._basePanel.isSegment()
-        ? this._formatSerialSegmentData(frameData, device.addresses, flush)
-        : this._formatSerialData(frameData, device.addresses, flush);
+    const serialData = this._formatSerialData(frameData, device.addresses, flush);
 
     device.write(serialData, (err) => {
       if (err) console.warn('Error on write:', err.message);
     });
   }
 
-  send(frameData, flush = true) {
-    if (this.devices.length === 0) {
-      throw new Error('No serial ports available');
-    }
-
+  _validateFrameData(frameData) {
     if (!Array.isArray(frameData)) {
       if (Buffer.isBuffer(frameData)) {
         frameData = Array.from(new Uint8Array(frameData));
@@ -977,11 +910,21 @@ class Display {
         throw new Error('Source frame data must be an Array or a Buffer');
       }
     }
-    
+    return frameData;
+  }
+
+  send(frameData, flush = true) {
+    if (this.devices.length === 0) {
+      throw new Error('No serial ports available');
+    }
+
+    frameData = this._validateFrameData(frameData);
+
     const currentFrameHash = hashFrameData(frameData);
     if (currentFrameHash === this.lastFrameHash) {
       return;
     }
+    this.lastFrameHash = currentFrameHash;
 
     const now = Date.now();
     if (this.lastSendTime && now - this.lastSendTime < this.minSendInterval) {
@@ -989,7 +932,6 @@ class Display {
     }
 
     this.lastSendTime = now;
-    this.lastFrameHash = currentFrameHash;
 
     this.devices.forEach((device) => {
       this._sendToDevice(device, frameData, flush);
@@ -997,11 +939,142 @@ class Display {
   }
 }
 
-const createDisplay = (layout, devicePath, options) => {
-  return new Display(layout, devicePath, options)
+class SegmentDisplay extends Display {
+  constructor(layout, devices, options = {}) {
+    super(layout, devices, options);
+  }
+
+  _sendToDevice(device, frameData, flush) {
+    const { verticalFrameData, horizontalFrameData } = this._prepareFrameData(frameData);
+    this._sendFrameDataToDevice(device, verticalFrameData, horizontalFrameData, flush);
+  }
+
+  _prepareFrameData(frameData) {
+    if (!isImageData(frameData)) {
+      frameData = createImageData(frameData, this.width, this.height);
+    }
+
+    return {
+      verticalFrameData: this._resizeFrameData(
+        frameData,
+        this._segmentDisplayVerticalSize
+      ),
+      horizontalFrameData: this._resizeFrameData(
+        frameData,
+        this._segmentDisplayHorizontalSize
+      ),
+    };
+  }
+
+  _resizeFrameData(frameData, targetSize) {
+    return resizeImageData(
+      frameData,
+      this.width,
+      this.height,
+      targetSize.width,
+      targetSize.height
+    );
+  }
+
+  _sendFrameDataToDevice(device, verticalFrameData, horizontalFrameData, flush) {
+    const serialData = this._formatSerialSegmentData(
+      verticalFrameData,
+      horizontalFrameData,
+      device.addresses,
+      flush
+    );
+
+    device.write(serialData, (err) => {
+      if (err) console.warn('Error on write:', err.message);
+    });
+  }
+
+  _formatSerialSegmentData(verticalFrameData, horizontalFrameData, addresses, flush) {
+    let serialData = new Uint8Array();
+
+    verticalFrameData = this._formatFrameData(
+      verticalFrameData,
+      this._segmentDisplayVerticalSize.width,
+      this._segmentDisplayVerticalSize.height
+    );
+    horizontalFrameData = this._formatFrameData(
+      horizontalFrameData,
+      this._segmentDisplayHorizontalSize.width,
+      this._segmentDisplayHorizontalSize.height
+    );
+
+    this._loopPanels((panel, r, c) => {
+      const verticalPanelData = this._parsePanelData(
+        verticalFrameData,
+        r,
+        c,
+        panel.verticalContentSize
+      );
+      const horizontalPanelData = this._parsePanelData(
+        horizontalFrameData,
+        r,
+        c,
+        panel.horizontalContentSize
+      );
+
+      if (addresses.includes(panel.address)) {
+        panel.setVerticalContent(verticalPanelData);
+        panel.setHorizontalContent(horizontalPanelData);
+        serialData = concatTypedArrays(
+          serialData,
+          panel.getSerialFormat(flush)
+        );
+      }
+    });
+
+    return serialData;
+  }
+
+  get _segmentDisplayVerticalSize() {
+    const { width, height } = this._basePanel.verticalContentSize;
+    return {
+      width: width * this.cols,
+      height: height * this.rows,
+    };
+  }
+
+  get _segmentDisplayHorizontalSize() {
+    const { width, height } = this._basePanel.horizontalContentSize;
+    return {
+      width: width * this.cols,
+      height: height * this.rows,
+    };
+  }
+
+  sendSegmentData(verticalFrameData, horizontalFrameData, flush = true) {
+    if (this.devices.length === 0) {
+      throw new Error('No serial ports available');
+    }
+
+    verticalFrameData = this._validateFrameData(verticalFrameData);
+    horizontalFrameData = this._validateFrameData(horizontalFrameData);
+
+    const now = Date.now();
+    if (this.lastSendTime && now - this.lastSendTime < this.minSendInterval) {
+      console.warn('Rendering too quickly. You might be calling render incorrectly');
+    }
+
+    this.lastSendTime = now;
+
+    this.devices.forEach((device) => {
+      this._sendFrameDataToDevice(device, verticalFrameData, horizontalFrameData, flush);
+    });
+  }
+}
+
+const createDisplay = (layout, devicePath, options = {}) => {
+  return (options.panel?.style ===  PanelStyles.segment) ? 
+    new SegmentDisplay(layout, devicePath, options) : 
+    new Display(layout, devicePath, options)
 };
 
 exports.Display = Display;
 exports.Panels = index;
+exports.SegmentDisplay = SegmentDisplay;
 exports.Utils = utils;
 exports.createDisplay = createDisplay;

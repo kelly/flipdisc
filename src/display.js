@@ -80,7 +80,7 @@ export default class Display {
   _initPanels(layout, options) {
     const { width, height, type } = options;
 
-    const Panel = (options.prototype instanceof Panels.Panel) ? options : type || Panels.AlfaZetaPanel;
+    const Panel = options.prototype instanceof Panels.Panel ? options : type || Panels.AlfaZetaPanel;
 
     this.panels = layout.map((row) =>
       row.map((address) => new Panel(address, width, height))
@@ -111,7 +111,7 @@ export default class Display {
     }
     return rotated;
   }
-  
+
   _rotate90(frameData) {
     const rows = frameData.length;
     const cols = frameData[0].length;
@@ -169,55 +169,11 @@ export default class Display {
     return serialData;
   }
 
-  _formatSerialSegmentData(frameData, addresses, flush) {
-    let serialData = new Uint8Array();
-
-    const verticalSize = this._segmentDisplayVerticalSize;
-    const horizontalSize = this._segmentDisplayHorizontalSize;
-
-    const verticalFrameData = this._formatFrameData(
-      frameData,
-      verticalSize.width,
-      verticalSize.height
-    );
-    const horizontalFrameData = this._formatFrameData(
-      frameData,
-      horizontalSize.width,
-      horizontalSize.height
-    );
-
-    this._loopPanels((panel, r, c) => {
-      const verticalPanelData = this._parsePanelData(
-        verticalFrameData,
-        r,
-        c,
-        panel.verticalContentSize
-      );
-      const horizontalPanelData = this._parsePanelData(
-        horizontalFrameData,
-        r,
-        c,
-        panel.horizontalContentSize
-      );
-
-      if (addresses.includes(panel.address)) {
-        panel.setVerticalContent(verticalPanelData);
-        panel.setHorizontalContent(horizontalPanelData);
-        serialData = Utils.concatTypedArrays(
-          serialData,
-          panel.getSerialFormat(flush)
-        );
-      }
-    });
-
-    return serialData;
-  }
-
   _parsePanelData(frameData, r, c, size = { width: this.panelWidth, height: this.panelHeight }) {
     const { width, height } = size;
     return frameData
       .slice(r * height, (r + 1) * height)
-      .map((row) => row.slice(c * width, (c + 1) * width))
+      .map((row) => row.slice(c * width, (c + 1) * width));
   }
 
   _formatFrameData(frameData, width = this.width, height = this.height) {
@@ -228,31 +184,15 @@ export default class Display {
       width,
       height
     );
-    const formatted =  Utils.formatRGBAPixels(resized, width, height);
+    const formatted = Utils.formatRGBAPixels(resized, width, height);
     return this._formatOrientation(formatted);
-  }
-
-  get _segmentDisplayVerticalSize() {
-    const { width, height } = this._basePanel.verticalContentSize;
-    return {
-      width: width * this.cols,
-      height: height * this.rows,
-    };
-  }
-
-  get _segmentDisplayHorizontalSize() {
-    const { width, height } = this._basePanel.horizontalContentSize;
-    return {
-      width: width * this.cols,
-      height: height * this.rows,
-    };
   }
 
   get _basePanel() {
     return this.panels[0][0];
   }
 
-  get deviceWidth() { 
+  get deviceWidth() {
     return this.panelWidth * this.cols;
   }
 
@@ -349,14 +289,22 @@ export default class Display {
       frameData = Utils.createImageData(frameData, this.width, this.height);
     }
 
-    const serialData =
-      this._basePanel.isSegment()
-        ? this._formatSerialSegmentData(frameData, device.addresses, flush)
-        : this._formatSerialData(frameData, device.addresses, flush);
+    const serialData = this._formatSerialData(frameData, device.addresses, flush);
 
     device.write(serialData, (err) => {
       if (err) console.warn('Error on write:', err.message);
     });
+  }
+
+  _validateFrameData(frameData) {
+    if (!Array.isArray(frameData)) {
+      if (Buffer.isBuffer(frameData)) {
+        frameData = Array.from(new Uint8Array(frameData));
+      } else {
+        throw new Error('Source frame data must be an Array or a Buffer');
+      }
+    }
+    return frameData;
   }
 
   send(frameData, flush = true) {
@@ -364,18 +312,13 @@ export default class Display {
       throw new Error('No serial ports available');
     }
 
-    if (!Array.isArray(frameData)) {
-      if (Buffer.isBuffer(frameData)) {
-        frameData = Array.from(new Uint8Array(frameData))
-      } else {
-        throw new Error('Source frame data must be an Array or a Buffer');
-      }
-    }
-    
+    frameData = this._validateFrameData(frameData);
+
     const currentFrameHash = Utils.hashFrameData(frameData);
     if (currentFrameHash === this.lastFrameHash) {
       return;
     }
+    this.lastFrameHash = currentFrameHash;
 
     const now = Date.now();
     if (this.lastSendTime && now - this.lastSendTime < this.minSendInterval) {
@@ -383,7 +326,6 @@ export default class Display {
     }
 
     this.lastSendTime = now;
-    this.lastFrameHash = currentFrameHash;
 
     this.devices.forEach((device) => {
       this._sendToDevice(device, frameData, flush);
