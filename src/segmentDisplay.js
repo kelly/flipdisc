@@ -6,11 +6,6 @@ export default class SegmentDisplay extends Display {
     super(layout, devices, options);
   }
 
-  _sendToDevice(device, frameData, flush) {
-    const { verticalFrameData, horizontalFrameData } = this._prepareFrameData(frameData);
-    this._sendFrameDataToDevice(device, verticalFrameData, horizontalFrameData, flush);
-  }
-
   _prepareFrameData(frameData) {
     if (!Utils.isImageData(frameData)) {
       frameData = Utils.createImageData(frameData, this.width, this.height);
@@ -38,7 +33,7 @@ export default class SegmentDisplay extends Display {
     );
   }
 
-  _sendFrameDataToDevice(device, verticalFrameData, horizontalFrameData, flush) {
+  _sendToDevice(device, verticalFrameData, horizontalFrameData, flush) {
     const serialData = this._formatSerialSegmentData(
       verticalFrameData,
       horizontalFrameData,
@@ -54,16 +49,8 @@ export default class SegmentDisplay extends Display {
   _formatSerialSegmentData(verticalFrameData, horizontalFrameData, addresses, flush) {
     let serialData = new Uint8Array();
 
-    verticalFrameData = this._formatFrameData(
-      verticalFrameData,
-      this._segmentDisplayVerticalSize.width,
-      this._segmentDisplayVerticalSize.height
-    );
-    horizontalFrameData = this._formatFrameData(
-      horizontalFrameData,
-      this._segmentDisplayHorizontalSize.width,
-      this._segmentDisplayHorizontalSize.height
-    );
+    verticalFrameData = this._formatFrameData(verticalFrameData);
+    horizontalFrameData = this._formatFrameData(horizontalFrameData);
 
     this._loopPanels((panel, r, c) => {
       const verticalPanelData = this._parsePanelData(
@@ -107,24 +94,20 @@ export default class SegmentDisplay extends Display {
       height: height * this.rows,
     };
   }
+  
+  send(frameData, flush = true) {
+    const { verticalFrameData, horizontalFrameData } = this._prepareFrameData(frameData);
+    this.sendSegmentData(verticalFrameData, horizontalFrameData, flush);
+  }
 
   sendSegmentData(verticalFrameData, horizontalFrameData, flush = true) {
-    if (this.devices.length === 0) {
-      throw new Error('No serial ports available');
-    }
+    this._prepareSend(verticalFrameData); 
 
     verticalFrameData = this._validateFrameData(verticalFrameData);
     horizontalFrameData = this._validateFrameData(horizontalFrameData);
 
-    const now = Date.now();
-    if (this.lastSendTime && now - this.lastSendTime < this.minSendInterval) {
-      console.warn('Rendering too quickly. You might be calling render incorrectly');
-    }
-
-    this.lastSendTime = now;
-
     this.devices.forEach((device) => {
-      this._sendFrameDataToDevice(device, verticalFrameData, horizontalFrameData, flush);
+      this._sendToDevice(device, verticalFrameData, horizontalFrameData, flush);
     });
   }
 }

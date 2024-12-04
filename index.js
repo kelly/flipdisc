@@ -4,7 +4,7 @@ import * as Utils from './src/utils.js'
 import * as Panels from './src/panels/index.js'
 
 const createDisplay = (layout, devicePath, options = {}) => {
-  return (options.panel?.style ===  Panels.PanelStyles.segment) ? 
+  return (options.panel?.type?.style ===  Panels.PanelStyles.segment) ? 
     new SegmentDisplay(layout, devicePath, options) : 
     new Display(layout, devicePath, options)
 }

@@ -9,7 +9,7 @@ const defaults = {
   panel: {
     width: 28,
     height: 7,
-    type: Panels.AlfaZetaPanel,
+    type: Panels.AlfaZetaPanel
   },
 };
 
@@ -176,14 +176,7 @@ export default class Display {
       .map((row) => row.slice(c * width, (c + 1) * width));
   }
 
-  _formatFrameData(frameData, width = this.width, height = this.height) {
-    const resized = Utils.resizeImageData(
-      frameData,
-      this.width,
-      this.height,
-      width,
-      height
-    );
+  _formatFrameData(frameData) {
     const formatted = Utils.formatRGBAPixels(resized, width, height);
     return this._formatOrientation(formatted);
   }
@@ -297,6 +290,7 @@ export default class Display {
   }
 
   _validateFrameData(frameData) {
+    // TODO: validate size
     if (!Array.isArray(frameData)) {
       if (Buffer.isBuffer(frameData)) {
         frameData = Array.from(new Uint8Array(frameData));
@@ -307,12 +301,10 @@ export default class Display {
     return frameData;
   }
 
-  send(frameData, flush = true) {
+  _prepareSend(frameData) {
     if (this.devices.length === 0) {
       throw new Error('No serial ports available');
     }
-
-    frameData = this._validateFrameData(frameData);
 
     const currentFrameHash = Utils.hashFrameData(frameData);
     if (currentFrameHash === this.lastFrameHash) {
@@ -326,6 +318,11 @@ export default class Display {
     }
 
     this.lastSendTime = now;
+  }
+
+  send(frameData, flush = true) {
+    frameData = this._validateFrameData(frameData);
+    this._prepareSend(frameData);
 
     this.devices.forEach((device) => {
       this._sendToDevice(device, frameData, flush);

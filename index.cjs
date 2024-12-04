@@ -615,7 +615,7 @@ const defaults = {
   panel: {
     width: 28,
     height: 7,
-    type: AlfaZetaPanel,
+    type: AlfaZetaPanel
   },
 };
 
@@ -782,14 +782,7 @@ class Display {
       .map((row) => row.slice(c * width, (c + 1) * width));
   }
 
-  _formatFrameData(frameData, width = this.width, height = this.height) {
-    const resized = resizeImageData(
-      frameData,
-      this.width,
-      this.height,
-      width,
-      height
-    );
+  _formatFrameData(frameData) {
     const formatted = formatRGBAPixels(resized, width, height);
     return this._formatOrientation(formatted);
   }
@@ -903,6 +896,7 @@ class Display {
   }
 
   _validateFrameData(frameData) {
+    // TODO: validate size
     if (!Array.isArray(frameData)) {
       if (Buffer.isBuffer(frameData)) {
         frameData = Array.from(new Uint8Array(frameData));
@@ -913,12 +907,10 @@ class Display {
     return frameData;
   }
 
-  send(frameData, flush = true) {
+  _prepareSend(frameData) {
     if (this.devices.length === 0) {
       throw new Error('No serial ports available');
     }
-
-    frameData = this._validateFrameData(frameData);
 
     const currentFrameHash = hashFrameData(frameData);
     if (currentFrameHash === this.lastFrameHash) {
@@ -932,6 +924,11 @@ class Display {
     }
 
     this.lastSendTime = now;
+  }
+
+  send(frameData, flush = true) {
+    frameData = this._validateFrameData(frameData);
+    this._prepareSend(frameData);
 
     this.devices.forEach((device) => {
       this._sendToDevice(device, frameData, flush);
@@ -942,11 +939,6 @@ class Display {
 class SegmentDisplay extends Display {
   constructor(layout, devices, options = {}) {
     super(layout, devices, options);
-  }
-
-  _sendToDevice(device, frameData, flush) {
-    const { verticalFrameData, horizontalFrameData } = this._prepareFrameData(frameData);
-    this._sendFrameDataToDevice(device, verticalFrameData, horizontalFrameData, flush);
   }
 
   _prepareFrameData(frameData) {
@@ -976,7 +968,7 @@ class SegmentDisplay extends Display {
     );
   }
 
-  _sendFrameDataToDevice(device, verticalFrameData, horizontalFrameData, flush) {
+  _sendToDevice(device, verticalFrameData, horizontalFrameData, flush) {
     const serialData = this._formatSerialSegmentData(
       verticalFrameData,
       horizontalFrameData,
@@ -992,16 +984,8 @@ class SegmentDisplay extends Display {
   _formatSerialSegmentData(verticalFrameData, horizontalFrameData, addresses, flush) {
     let serialData = new Uint8Array();
 
-    verticalFrameData = this._formatFrameData(
-      verticalFrameData,
-      this._segmentDisplayVerticalSize.width,
-      this._segmentDisplayVerticalSize.height
-    );
-    horizontalFrameData = this._formatFrameData(
-      horizontalFrameData,
-      this._segmentDisplayHorizontalSize.width,
-      this._segmentDisplayHorizontalSize.height
-    );
+    verticalFrameData = this._formatFrameData(verticalFrameData);
+    horizontalFrameData = this._formatFrameData(horizontalFrameData);
 
     this._loopPanels((panel, r, c) => {
       const verticalPanelData = this._parsePanelData(
@@ -1045,30 +1029,26 @@ class SegmentDisplay extends Display {
       height: height * this.rows,
     };
   }
+  
+  send(frameData, flush = true) {
+    const { verticalFrameData, horizontalFrameData } = this._prepareFrameData(frameData);
+    this.sendSegmentData(verticalFrameData, horizontalFrameData, flush);
+  }
 
   sendSegmentData(verticalFrameData, horizontalFrameData, flush = true) {
-    if (this.devices.length === 0) {
-      throw new Error('No serial ports available');
-    }
+    this._prepareSend(verticalFrameData); 
 
     verticalFrameData = this._validateFrameData(verticalFrameData);
     horizontalFrameData = this._validateFrameData(horizontalFrameData);
 
-    const now = Date.now();
-    if (this.lastSendTime && now - this.lastSendTime < this.minSendInterval) {
-      console.warn('Rendering too quickly. You might be calling render incorrectly');
-    }
-
-    this.lastSendTime = now;
-
     this.devices.forEach((device) => {
-      this._sendFrameDataToDevice(device, verticalFrameData, horizontalFrameData, flush);
+      this._sendToDevice(device, verticalFrameData, horizontalFrameData, flush);
     });
   }
 }
 
 const createDisplay = (layout, devicePath, options = {}) => {
-  return (options.panel?.style ===  PanelStyles.segment) ? 
+  return (options.panel?.type?.style ===  PanelStyles.segment) ? 
     new SegmentDisplay(layout, devicePath, options) : 
     new Display(layout, devicePath, options)
 };
