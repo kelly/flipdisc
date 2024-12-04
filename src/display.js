@@ -176,9 +176,9 @@ export default class Display {
       .map((row) => row.slice(c * width, (c + 1) * width));
   }
 
-  _formatFrameData(frameData, width = this.width, height = this.height) {
+  _formatFrameData(frameData, size = { width: this.width, height: this.height }) {
     if (Utils.isImageData(frameData)) {
-      frameData = Utils.formatRGBAPixels(frameData, width, height);
+      frameData = Utils.formatRGBAPixels(frameData, size.width, size.height);
     }
     return this._formatOrientation(frameData);
   }
@@ -291,7 +291,7 @@ export default class Display {
 
   _validateFrameData(frameData, size = { width: this.width, height: this.height }) {
     const isImageData = Utils.isImageData(frameData);
-    const imageSize = size.width * size.height * 4;
+    const imageLen = size.width * size.height * 4;
     const len = frameData.length;
     const rowLen = frameData[0]?.length;
 
@@ -302,7 +302,7 @@ export default class Display {
 
     if (Array.isArray(frameData) && len > 0) { 
       if ((!isImageData && (len !== size.height || rowLen !== size.width)) || 
-          (isImageData && (len !== imageSize))) {
+          (isImageData && (len !== imageLen))) {
         throw new Error('Frame data size does not match display size');
       } 
     }

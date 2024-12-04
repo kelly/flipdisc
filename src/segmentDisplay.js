@@ -37,13 +37,8 @@ export default class SegmentDisplay extends Display {
   _formatSerialSegmentData(verticalFrameData, horizontalFrameData, addresses, flush) {
     let serialData = new Uint8Array();
 
-    verticalFrameData = this._formatFrameData(verticalFrameData, 
-      this.verticalContentSize.width, 
-      this.verticalContentSize.height);
-
-    horizontalFrameData = this._formatFrameData(horizontalFrameData, 
-      this.horizontalContentSize.width, 
-      this.horizontalContentSize.height);
+    verticalFrameData = this._formatFrameData(verticalFrameData, this.verticalContentSize);
+    horizontalFrameData = this._formatFrameData(horizontalFrameData, this.horizontalContentSize);
 
     this._loopPanels((panel, r, c) => {
       const verticalPanelData = this._parsePanelData(
