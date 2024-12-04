@@ -177,8 +177,10 @@ export default class Display {
   }
 
   _formatFrameData(frameData, width = this.width, height = this.height) {
-    const formatted = Utils.formatRGBAPixels(frameData, width, height);
-    return this._formatOrientation(formatted);
+    if (Utils.isImageData(frameData)) {
+      frameData = Utils.formatRGBAPixels(frameData, width, height);
+    }
+    return this._formatOrientation(frameData);
   }
 
   get _basePanel() {
@@ -277,20 +279,34 @@ export default class Display {
     };
   }
 
-  _sendToDevice(device, frameData, flush) {
-    if (!Utils.isImageData(frameData)) {
-      frameData = Utils.createImageData(frameData, this.width, this.height);
+  _write(device, data) {
+    if (this.devices.length === 0) {
+      throw new Error('No serial ports available');
     }
 
-    const serialData = this._formatSerialData(frameData, device.addresses, flush);
-
-    device.write(serialData, (err) => {
+    device.write(data, (err) => {
       if (err) console.warn('Error on write:', err.message);
     });
   }
 
-  _validateFrameData(frameData) {
-    // TODO: validate size
+  _validateFrameData(frameData, size = { width: this.width, height: this.height }) {
+    const isImageData = Utils.isImageData(frameData);
+    const imageSize = size.width * size.height * 4;
+    const len = frameData.length;
+    const rowLen = frameData[0]?.length;
+
+    // flip width and height if rotation is 90 or 270
+    if (this.rotation === 90 || this.rotation === 270) {
+      size = { width: size.height, height: size.width };
+    }
+
+    if (Array.isArray(frameData) && len > 0) { 
+      if ((!isImageData && (len !== size.height || rowLen !== size.width)) || 
+          (isImageData && (len !== imageSize))) {
+        throw new Error('Frame data size does not match display size');
+      } 
+    }
+
     if (!Array.isArray(frameData)) {
       if (Buffer.isBuffer(frameData)) {
         frameData = Array.from(new Uint8Array(frameData));
@@ -301,11 +317,7 @@ export default class Display {
     return frameData;
   }
 
-  _prepareSend(frameData) {
-    if (this.devices.length === 0) {
-      throw new Error('No serial ports available');
-    }
-
+  _setFrameHash(...frameData) {
     const currentFrameHash = Utils.hashFrameData(frameData);
     if (currentFrameHash === this.lastFrameHash) {
       return;
@@ -316,16 +328,16 @@ export default class Display {
     if (this.lastSendTime && now - this.lastSendTime < this.minSendInterval) {
       console.warn('Rendering too quickly. You might be calling render incorrectly');
     }
-
     this.lastSendTime = now;
   }
 
   send(frameData, flush = true) {
     frameData = this._validateFrameData(frameData);
-    this._prepareSend(frameData);
+    this._setFrameHash(frameData);
 
     this.devices.forEach((device) => {
-      this._sendToDevice(device, frameData, flush);
+      const serialData = this._formatSerialData(frameData, device.addresses, flush);
+      this._write(device, serialData);
     });
   }
 }

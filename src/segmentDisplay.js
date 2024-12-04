@@ -14,46 +14,36 @@ export default class SegmentDisplay extends Display {
     return {
       verticalFrameData: this._resizeFrameData(
         frameData,
-        this._segmentDisplayVerticalSize
+        this.verticalContentSize
       ),
       horizontalFrameData: this._resizeFrameData(
         frameData,
-        this._segmentDisplayHorizontalSize
+        this.horizontalContentSize
       ),
     };
   }
 
   _resizeFrameData(frameData, targetSize) {
+    const { width, height } = targetSize
     return Utils.resizeImageData(
       frameData,
       this.width,
       this.height,
-      targetSize.width,
-      targetSize.height
+      width,
+      height
     );
-  }
-
-  _sendToDevice(device, verticalFrameData, horizontalFrameData, flush) {
-    const serialData = this._formatSerialSegmentData(
-      verticalFrameData,
-      horizontalFrameData,
-      device.addresses,
-      flush
-    );
-
-    device.write(serialData, (err) => {
-      if (err) console.warn('Error on write:', err.message);
-    });
   }
 
   _formatSerialSegmentData(verticalFrameData, horizontalFrameData, addresses, flush) {
     let serialData = new Uint8Array();
 
-    const { wV, hV } =  this._segmentDisplayVerticalSize;
-    const { wH, hH } =  this._segmentDisplayHorizontalSize;
+    verticalFrameData = this._formatFrameData(verticalFrameData, 
+      this.verticalContentSize.width, 
+      this.verticalContentSize.height);
 
-    verticalFrameData = this._formatFrameData(verticalFrameData, wV, hV);
-    horizontalFrameData = this._formatFrameData(horizontalFrameData, wH, hH);
+    horizontalFrameData = this._formatFrameData(horizontalFrameData, 
+      this.horizontalContentSize.width, 
+      this.horizontalContentSize.height);
 
     this._loopPanels((panel, r, c) => {
       const verticalPanelData = this._parsePanelData(
@@ -82,7 +72,7 @@ export default class SegmentDisplay extends Display {
     return serialData;
   }
 
-  get _segmentDisplayVerticalSize() {
+  get verticalContentSize() {
     const { width, height } = this._basePanel.verticalContentSize;
     return {
       width: width * this.cols,
@@ -90,7 +80,7 @@ export default class SegmentDisplay extends Display {
     };
   }
 
-  get _segmentDisplayHorizontalSize() {
+  get horizontalContentSize() {
     const { width, height } = this._basePanel.horizontalContentSize;
     return {
       width: width * this.cols,
@@ -104,13 +94,20 @@ export default class SegmentDisplay extends Display {
   }
 
   sendSegmentData(verticalFrameData, horizontalFrameData, flush = true) {
-    this._prepareSend(verticalFrameData); 
+    this._setFrameHash(verticalFrameData, horizontalFrameData); 
 
-    verticalFrameData = this._validateFrameData(verticalFrameData);
-    horizontalFrameData = this._validateFrameData(horizontalFrameData);
+    verticalFrameData = this._validateFrameData(verticalFrameData, this.verticalContentSize);
+    horizontalFrameData = this._validateFrameData(horizontalFrameData, this.horizontalContentSize);
 
     this.devices.forEach((device) => {
-      this._sendToDevice(device, verticalFrameData, horizontalFrameData, flush);
+      const serialData = this._formatSerialSegmentData(
+        verticalFrameData,
+        horizontalFrameData,
+        device.addresses,
+        flush
+      );
+
+      this._write(device, serialData);
     });
   }
 }

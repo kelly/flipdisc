@@ -1,7 +1,7 @@
 import crypto from 'crypto';
 
-function hashFrameData(frameData) {
-  const flatData = frameData.flat();
+function hashFrameData(...arrays) {
+  const flatData = arrays.flat().flat();
   const buffer = Buffer.from(flatData);
   const hash = crypto.createHash('md5').update(buffer).digest('hex');
 
@@ -88,7 +88,7 @@ function mergeFrames(frameDatas, mergeStrategy = 'invert') {
 
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)) }
 
-function getLuminanceRGB(r, g, b) {
+function getLuminanceRGB(r = 0, g = 0, b = 0) {
   const luminance = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
   return luminance < 0.5 ? 0 : 1;
 }

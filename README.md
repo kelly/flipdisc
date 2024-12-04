@@ -85,6 +85,9 @@ const display = createDisplay(layout, dev, opt)
 display.send(frameData)
 // also accepts imageData buffer from a gl or canvas instance
 
+display.sendSegmentData(verticalSegmentData, horizontalSegmentData)
+// for segment displays: send array data for the vertical and/or horizontal aligned segments. 
+
 // get width
 display.width
 
