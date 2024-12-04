@@ -176,8 +176,8 @@ export default class Display {
       .map((row) => row.slice(c * width, (c + 1) * width));
   }
 
-  _formatFrameData(frameData) {
-    const formatted = Utils.formatRGBAPixels(resized, width, height);
+  _formatFrameData(frameData, width = this.width, height = this.height) {
+    const formatted = Utils.formatRGBAPixels(frameData, width, height);
     return this._formatOrientation(formatted);
   }
 
