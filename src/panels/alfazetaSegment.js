@@ -27,7 +27,7 @@ const PANEL_SEGMENTS = {
 export default class AlfaZetaSegmentPanel extends AlfaZetaPanel {
   constructor(address, width = PANEL_WIDTH_DEFAULT, height = PANEL_HEIGHT_DEFAULT) {
     super(address, width, height);
-    // this._content = Array.from({ length: this.width * this.height }, () => Array(PANEL_SEGMENT_COUNT).fill(0));
+    this._content = Array.from({ length: this.width * this.height }, () => Array(PANEL_SEGMENT_COUNT).fill(0));
   }
 
   // Virtual sizes are needed because each segment is essentially a 2x3 display
