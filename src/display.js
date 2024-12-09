@@ -42,30 +42,40 @@ export default class Display  {
     }
 
     this._initPanels(layout, options.panel);
-    this._initDevices(devices);
+
+    const deviceList = Array.isArray(devices) ? devices : [devices];
+
+    // Initialize all devices and wait for them to connect
+    this._initDevices(deviceList)
+      .then(() => this._setConnected())
+      .catch((err) => {
+        console.error('Failed to connect devices:', err);
+      });
   }
 
   _initDevices(devices) {
-    if (!Array.isArray(devices)) devices = [devices];
-
-    devices.forEach((args) => {
-      this._initDevice(args);
-    });
+    const promises = devices.map((args) => this._initDevice(args));
+    return Promise.all(promises);
   }
 
   _initDevice(args) {
-    if (typeof args === 'string') {
-      args = {
-        path: args,
-        addresses: this.allPanelAddresses,
-      };
-    }
+    return new Promise((resolve, reject) => {
+      if (typeof args === 'string') {
+        args = {
+          path: args,
+          addresses: this.allPanelAddresses,
+        };
+      }
 
-    const Device = Devices.deviceForInput(args.path);
-    const device = new Device(args.path, args.addresses, args.baudRate);
-    device.open(() => this._setConnected());
+      const Device = Devices.deviceForInput(args.path);
+      const device = new Device(args.path, args.addresses, args.baudRate);
 
-    this.devices.push(device);
+      device.open((err) => {
+        if (err) return reject(err);
+        this.devices.push(device);
+        resolve();
+      });
+    });
   }
 
   _setConnected() {
