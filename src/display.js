@@ -1,4 +1,3 @@
-import EventEmitter from 'events';
 import * as Utils from './utils.js';
 import * as Panels from './panels/index.js';
 import * as Devices from './devices/index.js';
@@ -15,9 +14,11 @@ const defaults = {
 };
 
 const MIN_SEND_INTERVAL_MS = 5;
+const MAX_QUEUE_LENGTH = 10;
 
-export default class Display extends EventEmitter {
+export default class Display  {
   constructor(layout, devices, options = {}) {
+    super();
     options = { ...defaults, ...options };
     this.panels = [];
     this.devices = [];
@@ -28,6 +29,10 @@ export default class Display extends EventEmitter {
     this.minSendInterval = MIN_SEND_INTERVAL_MS;
     this.lastFrameHash = null;
     this.isConnected = false;
+
+    // Queue for frame data when device isn't connected
+    this.sendQueue = [];
+    this.maxSendQueueLength = MAX_QUEUE_LENGTH; // Maximum length of the send queue
 
     if (!devices) {
       throw new Error('Device path must not be empty');
@@ -66,10 +71,11 @@ export default class Display extends EventEmitter {
 
   _setConnected() {
     this.isConnected = true;
-    this.emit('ready')
     process.once('exit', () => {
       this._closeDevices();
     });
+
+    this._processQueue();
   }
 
   _closeDevices() {
@@ -81,9 +87,7 @@ export default class Display extends EventEmitter {
 
   _initPanels(layout, options) {
     const { width, height, type } = options;
-
     const Panel = options.prototype instanceof Panels.Panel ? options : type || Panels.AlfaZetaPanel;
-
     this.panels = layout.map((row) =>
       row.map((address) => new Panel(address, width, height))
     );
@@ -158,7 +162,6 @@ export default class Display extends EventEmitter {
 
     this._loopPanels((panel, r, c) => {
       const panelData = this._parsePanelData(frameData, r, c);
-
       if (addresses.includes(panel.address)) {
         panel.setContent(panelData);
         serialData = Utils.concatTypedArrays(
@@ -215,18 +218,15 @@ export default class Display extends EventEmitter {
 
   get content() {
     const content = [];
-
     for (let r = 0; r < this.rows; r++) {
       for (let i = 0; i < this.panelHeight; i++) {
         const rowContent = [];
         for (let c = 0; c < this.cols; c++) {
-          // we want the non-formatted content here, so we're using _content
           rowContent.push(...this.panels[r][c]._content[i]);
         }
         content.push(rowContent);
       }
     }
-
     return this._formatOrientation(content);
   }
 
@@ -334,6 +334,19 @@ export default class Display extends EventEmitter {
   }
 
   send(frameData, flush = true) {
+    if (!this.isConnected) {
+      this.sendQueue.push({ frameData, flush });
+      if (this.sendQueue.length > this.maxSendQueueLength) {
+        this.sendQueue.pop();
+        console.warn('Send queue is full, discarding the latest frame');
+      }
+      return;
+    }
+
+    this._send(frameData, flush);
+  }
+
+  _send(frameData, flush) {
     frameData = this._validateFrameData(frameData);
     this._setFrameHash(frameData);
 
@@ -341,5 +354,12 @@ export default class Display extends EventEmitter {
       const serialData = this._formatSerialData(frameData, device.addresses, flush);
       this._write(device, serialData);
     });
+  }
+
+  _processQueue() {
+    while (this.sendQueue.length > 0) {
+      const { frameData, flush } = this.sendQueue.shift();
+      this._send(frameData, flush);
+    }
   }
 }
