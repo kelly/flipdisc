@@ -1,3 +1,4 @@
+import EventEmitter from 'events';
 import * as Utils from './utils.js';
 import * as Panels from './panels/index.js';
 import * as Devices from './devices/index.js';
@@ -15,7 +16,7 @@ const defaults = {
 
 const MIN_SEND_INTERVAL_MS = 5;
 
-export default class Display {
+export default class Display extends EventEmitter {
   constructor(layout, devices, options = {}) {
     options = { ...defaults, ...options };
     this.panels = [];
@@ -65,6 +66,7 @@ export default class Display {
 
   _setConnected() {
     this.isConnected = true;
+    this.emit('ready')
     process.once('exit', () => {
       this._closeDevices();
     });
