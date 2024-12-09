@@ -342,20 +342,11 @@ export default class Display  {
     this.lastSendTime = now;
   }
 
-  send(frameData, flush = true) {
+  send(frameData, flush) {
     if (!this.isConnected) {
-      this.sendQueue.push({ frameData, flush });
-      if (this.sendQueue.length > this.maxSendQueueLength) {
-        this.sendQueue.pop();
-        console.warn('Send queue is full, discarding the latest frame');
-      }
+      _addQueueItem({frameData, flush})
       return;
     }
-
-    this._send(frameData, flush);
-  }
-
-  _send(frameData, flush) {
     frameData = this._validateFrameData(frameData);
     this._setFrameHash(frameData);
 
@@ -365,10 +356,18 @@ export default class Display  {
     });
   }
 
+  _addQueueItem(data) {
+    this.sendQueue.push(data);
+    if (this.sendQueue.length > this.maxSendQueueLength) {
+      this.sendQueue.pop();
+      console.warn('Send queue is full, discarding the latest frame');
+    }
+  }
+  
   _processQueue() {
     while (this.sendQueue.length > 0) {
       const { frameData, flush } = this.sendQueue.shift();
-      this._send(frameData, flush);
+      this.send(frameData, flush);
     }
   }
 }

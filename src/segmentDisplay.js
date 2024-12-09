@@ -89,6 +89,11 @@ export default class SegmentDisplay extends Display {
   }
 
   sendSegmentData(verticalFrameData, horizontalFrameData, flush = true) {
+    if (!this.isConnected) {
+      _addQueueItem({verticalFrameData, horizontalFrameData, flush})
+      return;
+    }
+
     this._setFrameHash(verticalFrameData, horizontalFrameData); 
 
     verticalFrameData = this._validateFrameData(verticalFrameData, this.verticalContentSize);
@@ -104,5 +109,12 @@ export default class SegmentDisplay extends Display {
 
       this._write(device, serialData);
     });
+  }
+
+  _processQueue() {
+    while (this.sendQueue.length > 0) {
+      const { verticalFrameData, horizontalFrameData, flush} = this.sendQueue.shift();
+      this.sendSegmentData(verticalFrameData, horizontalFrameData, flush)
+    }
   }
 }
