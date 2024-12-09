@@ -18,7 +18,6 @@ const MAX_QUEUE_LENGTH = 10;
 
 export default class Display  {
   constructor(layout, devices, options = {}) {
-    super();
     options = { ...defaults, ...options };
     this.panels = [];
     this.devices = [];
