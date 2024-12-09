@@ -90,7 +90,7 @@ export default class SegmentDisplay extends Display {
 
   sendSegmentData(verticalFrameData, horizontalFrameData, flush = true) {
     if (!this.isConnected) {
-      _addQueueItem({verticalFrameData, horizontalFrameData, flush})
+      this._addQueueItem({verticalFrameData, horizontalFrameData, flush})
       return;
     }
 

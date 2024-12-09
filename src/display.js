@@ -344,7 +344,7 @@ export default class Display  {
 
   send(frameData, flush) {
     if (!this.isConnected) {
-      _addQueueItem({frameData, flush})
+      this._addQueueItem({frameData, flush})
       return;
     }
     frameData = this._validateFrameData(frameData);
@@ -363,7 +363,7 @@ export default class Display  {
       console.warn('Send queue is full, discarding the latest frame');
     }
   }
-  
+
   _processQueue() {
     while (this.sendQueue.length > 0) {
       const { frameData, flush } = this.sendQueue.shift();
