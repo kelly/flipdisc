@@ -5,7 +5,6 @@ export default class Panel {
     this.address = address;
     this.width = width;
     this.height = height;
-    this.style = style;
     this._content = this.defaultContent();
   }
 
@@ -26,7 +25,7 @@ export default class Panel {
   }
 
   static get style() {
-    return PanelStyles.segment;
+    return PanelStyles.dot;
   }
 
   getSerialFormat(options) {
