@@ -634,7 +634,7 @@ const defaults = {
 };
 
 const MIN_SEND_INTERVAL_MS = 5;
-const MAX_QUEUE_LENGTH = 10;
+const MAX_QUEUE_LENGTH = 100;
 
 class Display  {
   constructor(layout, devices, options = {}) {
@@ -651,6 +651,7 @@ class Display  {
     this.isConnected = false;
     this.sendQueue = [];
     this.maxSendQueueLength = MAX_QUEUE_LENGTH;
+    this.warnings = {};
 
     if (!devices) {
       throw new Error('Device path must not be empty');
@@ -949,7 +950,8 @@ class Display  {
       this.lastFrameHash = currentFrameHash;
 
       const now = Date.now();
-      if (this.lastSendTime && now - this.lastSendTime < this.minSendInterval) {
+      if (!this.warnings.renderingSpeed && this.lastSendTime && now - this.lastSendTime < this.minSendInterval) {
+        this.warnings.renderingSpeed = true;
         console.warn('Rendering too quickly. You might be calling render incorrectly');
       }
       this.lastSendTime = now;
@@ -977,14 +979,18 @@ class Display  {
     this.sendQueue.push(data);
     if (this.sendQueue.length > this.maxSendQueueLength) {
       this.sendQueue.pop();
-      console.warn('Send queue is full, discarding the latest frame');
+      if (!this.warnings.queueFull) {
+        this.warnings.queueFull = true;
+        console.warn('Send queue is full, discarding the latest frame');
+      }
     }
   }
 
-  _processQueue() {
+  async _processQueue() {
     while (this.sendQueue.length > 0) {
       const { frameData, flush } = this.sendQueue.shift();
-      this.send(frameData, flush);
+      this.send(frameData, flush);   
+      await sleep(10);
     }
   }
 }
