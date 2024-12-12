@@ -1,4 +1,4 @@
-import crypto from 'crypto';
+import { createHash } from 'node:crypto';
 
 function hashFrameData(...arrays) {
   const flatData = flatten(arrays);

@@ -1,18 +1,24 @@
 'use strict';
 
-var crypto = require('crypto');
+require('node:crypto');
 var EventEmitter = require('events');
 var serialport = require('serialport');
+var bindingMock = require('@serialport/binding-mock');
 var connectionString = require('connection-string');
 var net = require('net');
 var udp = require('node:dgram');
 
-function hashFrameData(frameData) {
-  const flatData = frameData.flat();
+function hashFrameData(...arrays) {
+  const flatData = flatten(arrays);
   const buffer = Buffer.from(flatData);
   const hash = crypto.createHash('md5').update(buffer).digest('hex');
-
   return hash;
+}
+
+function flatten(arr) {
+  return arr.reduce((acc, val) => {
+    return acc.concat(Array.isArray(val) ? flatten(val) : val);
+  }, []);
 }
 
 function concatTypedArrays(a, b) { // a, b TypedArray of same type
@@ -95,7 +101,7 @@ function mergeFrames(frameDatas, mergeStrategy = 'invert') {
 
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)) }
 
-function getLuminanceRGB(r, g, b) {
+function getLuminanceRGB(r = 0, g = 0, b = 0) {
   const luminance = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
   return luminance < 0.5 ? 0 : 1;
 }
@@ -193,11 +199,10 @@ const PanelStyles = {
 };
 
 class Panel {
-  constructor(address, width, height, style = PanelStyles.dot) {
+  constructor(address, width, height) {
     this.address = address;
     this.width = width;
     this.height = height;
-    this.style = style;
     this._content = this.defaultContent();
   }
 
@@ -218,7 +223,7 @@ class Panel {
   }
 
   static get style() {
-    return PanelStyles.segment;
+    return PanelStyles.dot;
   }
 
   getSerialFormat(options) {
@@ -466,12 +471,17 @@ class USBDevice extends Device {
   static devices = [];
   static exitHandlersSet = false;
 
-  constructor(path, addresses, baudRate) {
+  constructor(path, addresses, baudRate, isMock) {
     super(path, addresses);
     this.baudRate = baudRate || BAUD_RATE_DEFAULT;
     this.autoOpen = true;
     this.isOpen = false;
+    this.isMock = isMock;
 
+    if (this.isMock) {
+      bindingMock.MockBinding.createPort(path, { echo: false, record: true });
+    }
+    
     USBDevice.devices.push(this);
     USBDevice.setupExitHandlers();
   }
@@ -504,6 +514,7 @@ class USBDevice extends Device {
           path,
           baudRate,
           autoOpen,
+          ...(this.isMock && { binding: bindingMock.MockBinding }),
         },
         (err) => {
           if (err) {
@@ -551,6 +562,8 @@ class USBDevice extends Device {
   }
 
   _isSerialAvailable(path) {
+    if (this.isMock) return Promise.resolve(true);
+
     return serialport.SerialPort.list().then((ports) => {
       return !!ports.find((port) => port.path === path);
     });
@@ -612,6 +625,7 @@ const defaults = {
   rotation: 0,
   isMirrored: false,
   isInverted: false,
+  isMockTesting: false,
   panel: {
     width: 28,
     height: 7,
@@ -620,8 +634,9 @@ const defaults = {
 };
 
 const MIN_SEND_INTERVAL_MS = 5;
+const MAX_QUEUE_LENGTH = 10;
 
-class Display {
+class Display  {
   constructor(layout, devices, options = {}) {
     options = { ...defaults, ...options };
     this.panels = [];
@@ -629,10 +644,13 @@ class Display {
     this.rotation = options.rotation;
     this.isMirrored = options.isMirrored;
     this.isInverted = options.isInverted;
+    this.isMockTesting = options.isMockTesting;
     this.lastSendTime = null;
     this.minSendInterval = MIN_SEND_INTERVAL_MS;
     this.lastFrameHash = null;
     this.isConnected = false;
+    this.sendQueue = [];
+    this.maxSendQueueLength = MAX_QUEUE_LENGTH;
 
     if (!devices) {
       throw new Error('Device path must not be empty');
@@ -643,30 +661,39 @@ class Display {
     }
 
     this._initPanels(layout, options.panel);
-    this._initDevices(devices);
+
+    const deviceList = Array.isArray(devices) ? devices : [devices];
+
+    this._initDevices(deviceList)
+      .then(() => this._setConnected())
+      .catch((err) => {
+        console.error('Failed to connect devices:', err);
+      });
   }
 
   _initDevices(devices) {
-    if (!Array.isArray(devices)) devices = [devices];
-
-    devices.forEach((args) => {
-      this._initDevice(args);
-    });
+    const promises = devices.map((args) => this._initDevice(args));
+    return Promise.all(promises);
   }
 
   _initDevice(args) {
-    if (typeof args === 'string') {
-      args = {
-        path: args,
-        addresses: this.allPanelAddresses,
-      };
-    }
+    return new Promise((resolve, reject) => {
+      if (typeof args === 'string') {
+        args = {
+          path: args,
+          addresses: this.allPanelAddresses,
+        };
+      }
 
-    const Device = deviceForInput(args.path);
-    const device = new Device(args.path, args.addresses, args.baudRate);
-    device.open(() => this._setConnected());
+      const Device = deviceForInput(args.path);
+      const device = new Device(args.path, args.addresses, args.baudRate, this.isMockTesting);
 
-    this.devices.push(device);
+      device.open((err) => {
+        if (err) return reject(err);
+        this.devices.push(device);
+        resolve();
+      });
+    });
   }
 
   _setConnected() {
@@ -674,6 +701,8 @@ class Display {
     process.once('exit', () => {
       this._closeDevices();
     });
+
+    this._processQueue();
   }
 
   _closeDevices() {
@@ -685,9 +714,7 @@ class Display {
 
   _initPanels(layout, options) {
     const { width, height, type } = options;
-
     const Panel$1 = options.prototype instanceof Panel ? options : type || AlfaZetaPanel;
-
     this.panels = layout.map((row) =>
       row.map((address) => new Panel$1(address, width, height))
     );
@@ -762,7 +789,6 @@ class Display {
 
     this._loopPanels((panel, r, c) => {
       const panelData = this._parsePanelData(frameData, r, c);
-
       if (addresses.includes(panel.address)) {
         panel.setContent(panelData);
         serialData = concatTypedArrays(
@@ -782,9 +808,11 @@ class Display {
       .map((row) => row.slice(c * width, (c + 1) * width));
   }
 
-  _formatFrameData(frameData) {
-    const formatted = formatRGBAPixels(resized, width, height);
-    return this._formatOrientation(formatted);
+  _formatFrameData(frameData, size = { width: this.width, height: this.height }) {
+    if (isImageData(frameData)) {
+      frameData = formatRGBAPixels(frameData, size.width, size.height);
+    }
+    return this._formatOrientation(frameData);
   }
 
   get _basePanel() {
@@ -817,18 +845,15 @@ class Display {
 
   get content() {
     const content = [];
-
     for (let r = 0; r < this.rows; r++) {
       for (let i = 0; i < this.panelHeight; i++) {
         const rowContent = [];
         for (let c = 0; c < this.cols; c++) {
-          // we want the non-formatted content here, so we're using _content
           rowContent.push(...this.panels[r][c]._content[i]);
         }
         content.push(rowContent);
       }
     }
-
     return this._formatOrientation(content);
   }
 
@@ -883,20 +908,29 @@ class Display {
     };
   }
 
-  _sendToDevice(device, frameData, flush) {
-    if (!isImageData(frameData)) {
-      frameData = createImageData(frameData, this.width, this.height);
+  _write(device, data) {
+    if (this.devices.length === 0) {
+      throw new Error('No serial ports available');
     }
 
-    const serialData = this._formatSerialData(frameData, device.addresses, flush);
-
-    device.write(serialData, (err) => {
+    device.write(data, (err) => {
       if (err) console.warn('Error on write:', err.message);
     });
   }
 
-  _validateFrameData(frameData) {
-    // TODO: validate size
+  _validateFrameData(frameData, size = { width: this.width, height: this.height }) {
+    const isImageData$1 = isImageData(frameData);
+    const imageLen = size.width * size.height * 4;
+    const len = frameData.length;
+    const rowLen = frameData[0]?.length;
+
+    if (Array.isArray(frameData) && len > 0) { 
+      if ((!isImageData$1 && (len !== size.height || rowLen !== size.width)) || 
+          (isImageData$1 && (len !== imageLen))) {
+        throw new Error('Frame data size does not match display size');
+      } 
+    }
+
     if (!Array.isArray(frameData)) {
       if (Buffer.isBuffer(frameData)) {
         frameData = Array.from(new Uint8Array(frameData));
@@ -907,32 +941,51 @@ class Display {
     return frameData;
   }
 
-  _prepareSend(frameData) {
-    if (this.devices.length === 0) {
-      throw new Error('No serial ports available');
-    }
-
+  _isFrameChanged(...frameData) {
     const currentFrameHash = hashFrameData(frameData);
-    if (currentFrameHash === this.lastFrameHash) {
-      return;
-    }
-    this.lastFrameHash = currentFrameHash;
+    const isNew = (currentFrameHash !== this.lastFrameHash); 
 
-    const now = Date.now();
-    if (this.lastSendTime && now - this.lastSendTime < this.minSendInterval) {
-      console.warn('Rendering too quickly. You might be calling render incorrectly');
+    if (isNew) {
+      this.lastFrameHash = currentFrameHash;
+
+      const now = Date.now();
+      if (this.lastSendTime && now - this.lastSendTime < this.minSendInterval) {
+        console.warn('Rendering too quickly. You might be calling render incorrectly');
+      }
+      this.lastSendTime = now;
     }
 
-    this.lastSendTime = now;
+    return isNew;
   }
 
   send(frameData, flush = true) {
+    if (!this.isConnected) {
+      this._addQueueItem({frameData, flush});
+      return;
+    }
     frameData = this._validateFrameData(frameData);
-    this._prepareSend(frameData);
+
+    if (!this._isFrameChanged(frameData)) return;
 
     this.devices.forEach((device) => {
-      this._sendToDevice(device, frameData, flush);
+      const serialData = this._formatSerialData(frameData, device.addresses, flush);
+      this._write(device, serialData);
     });
+  }
+
+  _addQueueItem(data) {
+    this.sendQueue.push(data);
+    if (this.sendQueue.length > this.maxSendQueueLength) {
+      this.sendQueue.pop();
+      console.warn('Send queue is full, discarding the latest frame');
+    }
+  }
+
+  _processQueue() {
+    while (this.sendQueue.length > 0) {
+      const { frameData, flush } = this.sendQueue.shift();
+      this.send(frameData, flush);
+    }
   }
 }
 
@@ -949,43 +1002,31 @@ class SegmentDisplay extends Display {
     return {
       verticalFrameData: this._resizeFrameData(
         frameData,
-        this._segmentDisplayVerticalSize
+        this.verticalContentSize
       ),
       horizontalFrameData: this._resizeFrameData(
         frameData,
-        this._segmentDisplayHorizontalSize
+        this.horizontalContentSize
       ),
     };
   }
 
   _resizeFrameData(frameData, targetSize) {
+    const { width, height } = targetSize;
     return resizeImageData(
       frameData,
       this.width,
       this.height,
-      targetSize.width,
-      targetSize.height
+      width,
+      height
     );
-  }
-
-  _sendToDevice(device, verticalFrameData, horizontalFrameData, flush) {
-    const serialData = this._formatSerialSegmentData(
-      verticalFrameData,
-      horizontalFrameData,
-      device.addresses,
-      flush
-    );
-
-    device.write(serialData, (err) => {
-      if (err) console.warn('Error on write:', err.message);
-    });
   }
 
   _formatSerialSegmentData(verticalFrameData, horizontalFrameData, addresses, flush) {
     let serialData = new Uint8Array();
 
-    verticalFrameData = this._formatFrameData(verticalFrameData);
-    horizontalFrameData = this._formatFrameData(horizontalFrameData);
+    verticalFrameData = this._formatFrameData(verticalFrameData, this.verticalContentSize);
+    horizontalFrameData = this._formatFrameData(horizontalFrameData, this.horizontalContentSize);
 
     this._loopPanels((panel, r, c) => {
       const verticalPanelData = this._parsePanelData(
@@ -1014,7 +1055,7 @@ class SegmentDisplay extends Display {
     return serialData;
   }
 
-  get _segmentDisplayVerticalSize() {
+  get verticalContentSize() {
     const { width, height } = this._basePanel.verticalContentSize;
     return {
       width: width * this.cols,
@@ -1022,7 +1063,7 @@ class SegmentDisplay extends Display {
     };
   }
 
-  get _segmentDisplayHorizontalSize() {
+  get horizontalContentSize() {
     const { width, height } = this._basePanel.horizontalContentSize;
     return {
       width: width * this.cols,
@@ -1036,14 +1077,33 @@ class SegmentDisplay extends Display {
   }
 
   sendSegmentData(verticalFrameData, horizontalFrameData, flush = true) {
-    this._prepareSend(verticalFrameData); 
+    if (!this.isConnected) {
+      this._addQueueItem({verticalFrameData, horizontalFrameData, flush});
+      return;
+    }
 
-    verticalFrameData = this._validateFrameData(verticalFrameData);
-    horizontalFrameData = this._validateFrameData(horizontalFrameData);
+    if (!this._isFrameChanged(verticalFrameData, horizontalFrameData)) return;
+
+    verticalFrameData = this._validateFrameData(verticalFrameData, this.verticalContentSize);
+    horizontalFrameData = this._validateFrameData(horizontalFrameData, this.horizontalContentSize);
 
     this.devices.forEach((device) => {
-      this._sendToDevice(device, verticalFrameData, horizontalFrameData, flush);
+      const serialData = this._formatSerialSegmentData(
+        verticalFrameData,
+        horizontalFrameData,
+        device.addresses,
+        flush
+      );
+
+      this._write(device, serialData);
     });
+  }
+
+  _processQueue() {
+    while (this.sendQueue.length > 0) {
+      const { verticalFrameData, horizontalFrameData, flush} = this.sendQueue.shift();
+      this.sendSegmentData(verticalFrameData, horizontalFrameData, flush);
+    }
   }
 }
 
