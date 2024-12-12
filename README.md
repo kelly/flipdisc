@@ -7,9 +7,13 @@ A javascript library for flip dot, flip disc, and flip digit displays.
 - [flip disc website](https://flipdisc.io/)
 - [Github](http://www.github.com/kelly/flipdisc)
 - [NPM](https://www.npmjs.com/package/flipdisc)
-- [flipdigit server](https://github.com/kelly/flipdisc-server) draw elaborate visualizations on your flipdisc
+
+### Examples
+
+- [flip digit server](https://github.com/kelly/flipdisc-server) draw elaborate visualizations on your flipdisc
 - [flipdot iOS app](https://apps.apple.com/us/app/flipdisc/id6504055618) control your flipdisc from iOS
 - [depth camera](https://github.com/kelly/flipdisc-depth-camera) 
+- [flip digit canvas](https://github.com/kelly/flipdigit)
 
 ### Install
 
