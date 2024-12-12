@@ -1,6 +1,6 @@
 'use strict';
 
-require('node:crypto');
+var node_crypto = require('node:crypto');
 var EventEmitter = require('events');
 var serialport = require('serialport');
 var bindingMock = require('@serialport/binding-mock');
@@ -11,7 +11,7 @@ var udp = require('node:dgram');
 function hashFrameData(...arrays) {
   const flatData = flatten(arrays);
   const buffer = Buffer.from(flatData);
-  const hash = crypto.createHash('md5').update(buffer).digest('hex');
+  const hash = node_crypto.createHash('md5').update(buffer).digest('hex');
   return hash;
 }
 

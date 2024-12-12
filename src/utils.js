@@ -3,7 +3,7 @@ import { createHash } from 'node:crypto';
 function hashFrameData(...arrays) {
   const flatData = flatten(arrays);
   const buffer = Buffer.from(flatData);
-  const hash = crypto.createHash('md5').update(buffer).digest('hex');
+  const hash = createHash('md5').update(buffer).digest('hex');
   return hash;
 }
 
