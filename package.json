@@ -24,6 +24,7 @@
   "author": "@kelly",
   "license": "BSD-3-Clause-Attribution",
   "dependencies": {
+    "@serialport/binding-mock": "^10.2.2",
     "connection-string": "^4.4.0",
     "crypto": "^1.0.1",
     "flipdisc": "github:kelly/flipdisc",

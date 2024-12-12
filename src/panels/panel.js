@@ -1,7 +1,7 @@
 import PanelStyles from './styles.js';
 
 export default class Panel {
-  constructor(address, width, height, style = PanelStyles.dot) {
+  constructor(address, width, height) {
     this.address = address;
     this.width = width;
     this.height = height;

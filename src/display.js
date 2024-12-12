@@ -6,6 +6,7 @@ const defaults = {
   rotation: 0,
   isMirrored: false,
   isInverted: false,
+  isMockTesting: false,
   panel: {
     width: 28,
     height: 7,
@@ -24,14 +25,13 @@ export default class Display  {
     this.rotation = options.rotation;
     this.isMirrored = options.isMirrored;
     this.isInverted = options.isInverted;
+    this.isMockTesting = options.isMockTesting;
     this.lastSendTime = null;
     this.minSendInterval = MIN_SEND_INTERVAL_MS;
     this.lastFrameHash = null;
     this.isConnected = false;
-
-    // Queue for frame data when device isn't connected
     this.sendQueue = [];
-    this.maxSendQueueLength = MAX_QUEUE_LENGTH; // Maximum length of the send queue
+    this.maxSendQueueLength = MAX_QUEUE_LENGTH;
 
     if (!devices) {
       throw new Error('Device path must not be empty');
@@ -45,7 +45,6 @@ export default class Display  {
 
     const deviceList = Array.isArray(devices) ? devices : [devices];
 
-    // Initialize all devices and wait for them to connect
     this._initDevices(deviceList)
       .then(() => this._setConnected())
       .catch((err) => {
@@ -68,7 +67,7 @@ export default class Display  {
       }
 
       const Device = Devices.deviceForInput(args.path);
-      const device = new Device(args.path, args.addresses, args.baudRate);
+      const device = new Device(args.path, args.addresses, args.baudRate, this.isMockTesting);
 
       device.open((err) => {
         if (err) return reject(err);
@@ -306,11 +305,6 @@ export default class Display  {
     const len = frameData.length;
     const rowLen = frameData[0]?.length;
 
-    // flip width and height if rotation is 90 or 270
-    if (this.rotation === 90 || this.rotation === 270) {
-      size = { width: size.height, height: size.width };
-    }
-
     if (Array.isArray(frameData) && len > 0) { 
       if ((!isImageData && (len !== size.height || rowLen !== size.width)) || 
           (isImageData && (len !== imageLen))) {
@@ -328,27 +322,31 @@ export default class Display  {
     return frameData;
   }
 
-  _setFrameHash(...frameData) {
+  _isFrameChanged(...frameData) {
     const currentFrameHash = Utils.hashFrameData(frameData);
-    if (currentFrameHash === this.lastFrameHash) {
-      return;
-    }
-    this.lastFrameHash = currentFrameHash;
+    const isNew = (currentFrameHash !== this.lastFrameHash) 
 
-    const now = Date.now();
-    if (this.lastSendTime && now - this.lastSendTime < this.minSendInterval) {
-      console.warn('Rendering too quickly. You might be calling render incorrectly');
+    if (isNew) {
+      this.lastFrameHash = currentFrameHash;
+
+      const now = Date.now();
+      if (this.lastSendTime && now - this.lastSendTime < this.minSendInterval) {
+        console.warn('Rendering too quickly. You might be calling render incorrectly');
+      }
+      this.lastSendTime = now;
     }
-    this.lastSendTime = now;
+
+    return isNew;
   }
 
-  send(frameData, flush) {
+  send(frameData, flush = true) {
     if (!this.isConnected) {
       this._addQueueItem({frameData, flush})
       return;
     }
     frameData = this._validateFrameData(frameData);
-    this._setFrameHash(frameData);
+
+    if (!this._isFrameChanged(frameData)) return;
 
     this.devices.forEach((device) => {
       const serialData = this._formatSerialData(frameData, device.addresses, flush);

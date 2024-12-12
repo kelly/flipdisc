@@ -1,6 +1,5 @@
 import * as Utils from '../utils.js'
 import Panel from './panel.js'
-import PanelStyles from './styles.js'
 
 const START_BYTES = [0x80]
 const FLUSH_BYTE  = [0x83]

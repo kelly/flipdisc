@@ -1,11 +1,16 @@
 import crypto from 'crypto';
 
 function hashFrameData(...arrays) {
-  const flatData = arrays.flat().flat();
+  const flatData = flatten(arrays);
   const buffer = Buffer.from(flatData);
   const hash = crypto.createHash('md5').update(buffer).digest('hex');
-
   return hash;
+}
+
+function flatten(arr) {
+  return arr.reduce((acc, val) => {
+    return acc.concat(Array.isArray(val) ? flatten(val) : val);
+  }, []);
 }
 
 function concatTypedArrays(a, b) { // a, b TypedArray of same type

@@ -94,7 +94,7 @@ export default class SegmentDisplay extends Display {
       return;
     }
 
-    this._setFrameHash(verticalFrameData, horizontalFrameData); 
+    if (!this._isFrameChanged(verticalFrameData, horizontalFrameData)) return;
 
     verticalFrameData = this._validateFrameData(verticalFrameData, this.verticalContentSize);
     horizontalFrameData = this._validateFrameData(horizontalFrameData, this.horizontalContentSize);

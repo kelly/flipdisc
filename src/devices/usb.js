@@ -1,5 +1,6 @@
 import Device from './device.js';
 import { SerialPort } from 'serialport';
+import { MockBinding } from '@serialport/binding-mock'
 
 const BAUD_RATE_DEFAULT = 57600;
 
@@ -7,12 +8,17 @@ export default class USBDevice extends Device {
   static devices = [];
   static exitHandlersSet = false;
 
-  constructor(path, addresses, baudRate) {
+  constructor(path, addresses, baudRate, isMock) {
     super(path, addresses);
     this.baudRate = baudRate || BAUD_RATE_DEFAULT;
     this.autoOpen = true;
     this.isOpen = false;
+    this.isMock = isMock;
 
+    if (this.isMock) {
+      MockBinding.createPort(path, { echo: false, record: true });
+    }
+    
     USBDevice.devices.push(this);
     USBDevice.setupExitHandlers();
   }
@@ -45,6 +51,7 @@ export default class USBDevice extends Device {
           path,
           baudRate,
           autoOpen,
+          ...(this.isMock && { binding: MockBinding }),
         },
         (err) => {
           if (err) {
@@ -92,6 +99,8 @@ export default class USBDevice extends Device {
   }
 
   _isSerialAvailable(path) {
+    if (this.isMock) return Promise.resolve(true);
+
     return SerialPort.list().then((ports) => {
       return !!ports.find((port) => port.path === path);
     });
