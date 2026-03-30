@@ -35,7 +35,8 @@ export default class SegmentDisplay extends Display {
   }
 
   _formatSerialSegmentData(verticalFrameData, horizontalFrameData, addresses, flush) {
-    let serialData = new Uint8Array();
+    const chunks = [];
+    let totalLength = 0;
 
     verticalFrameData = this._formatFrameData(verticalFrameData, this.verticalContentSize);
     horizontalFrameData = this._formatFrameData(horizontalFrameData, this.horizontalContentSize);
@@ -57,13 +58,18 @@ export default class SegmentDisplay extends Display {
       if (addresses.includes(panel.address)) {
         panel.setVerticalContent(verticalPanelData);
         panel.setHorizontalContent(horizontalPanelData);
-        serialData = Utils.concatTypedArrays(
-          serialData,
-          panel.getSerialFormat(flush)
-        );
+        const chunk = panel.getSerialFormat(flush);
+        chunks.push(chunk);
+        totalLength += chunk.length;
       }
     });
 
+    const serialData = new Uint8Array(totalLength);
+    let offset = 0;
+    for (const chunk of chunks) {
+      serialData.set(chunk, offset);
+      offset += chunk.length;
+    }
     return serialData;
   }
 
@@ -84,8 +90,13 @@ export default class SegmentDisplay extends Display {
   }
   
   send(frameData, flush = true) {
+    frameData = this._reshapeIfFlat(frameData);
     const { verticalFrameData, horizontalFrameData } = this._prepareFrameData(frameData);
     this.sendSegmentData(verticalFrameData, horizontalFrameData, flush);
+  }
+
+  sendRegion() {
+    throw new Error('sendRegion is not supported for segment displays');
   }
 
   sendSegmentData(verticalFrameData, horizontalFrameData, flush = true) {

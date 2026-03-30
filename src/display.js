@@ -1,3 +1,4 @@
+import EventEmitter from 'events';
 import * as Utils from './utils.js';
 import * as Panels from './panels/index.js';
 import * as Devices from './devices/index.js';
@@ -17,8 +18,9 @@ const defaults = {
 const MIN_SEND_INTERVAL_MS = 5;
 const MAX_QUEUE_LENGTH = 100;
 
-export default class Display  {
+export default class Display extends EventEmitter {
   constructor(layout, devices, options = {}) {
+    super();
     options = { ...defaults, ...options };
     this.panels = [];
     this.devices = [];
@@ -28,8 +30,10 @@ export default class Display  {
     this.isMockTesting = options.isMockTesting;
     this.lastSendTime = null;
     this.minSendInterval = MIN_SEND_INTERVAL_MS;
-    this.lastFrameHash = null;
+    this.lastFrameData = null;
     this.isConnected = false;
+    this._connectionError = null;
+    this._frameBuffer = null;
     this.sendQueue = [];
     this.maxSendQueueLength = MAX_QUEUE_LENGTH;
     this.warnings = {}
@@ -49,7 +53,12 @@ export default class Display  {
     this._initDevices(deviceList)
       .then(() => this._setConnected())
       .catch((err) => {
-        console.error('Failed to connect devices:', err);
+        this._connectionError = err;
+        if (this.listenerCount('error') > 0) {
+          this.emit('error', err);
+        } else {
+          console.error('Failed to connect devices:', err);
+        }
       });
   }
 
@@ -85,6 +94,16 @@ export default class Display  {
     });
 
     this._processQueue();
+    this.emit('connected');
+  }
+
+  ready() {
+    if (this.isConnected) return Promise.resolve();
+    if (this._connectionError) return Promise.reject(this._connectionError);
+    return new Promise((resolve, reject) => {
+      this.once('connected', resolve);
+      this.once('error', reject);
+    });
   }
 
   _closeDevices() {
@@ -104,6 +123,22 @@ export default class Display  {
 
   setInverted(isInverted) {
     this.isInverted = isInverted;
+  }
+
+  clear() {
+    const frame = Array.from({ length: this.height }, () => new Array(this.width).fill(0));
+    this.send(frame);
+  }
+
+  fill(value = 1) {
+    const frame = Array.from({ length: this.height }, () => new Array(this.width).fill(value));
+    this.send(frame);
+  }
+
+  close() {
+    this.isConnected = false;
+    this._closeDevices();
+    this.emit('disconnected');
   }
 
   _invert(frameData) {
@@ -166,20 +201,25 @@ export default class Display  {
   }
 
   _formatSerialData(frameData, addresses, flush) {
-    let serialData = new Uint8Array();
-    frameData = this._formatFrameData(frameData);
+    const chunks = [];
+    let totalLength = 0;
 
     this._loopPanels((panel, r, c) => {
       const panelData = this._parsePanelData(frameData, r, c);
       if (addresses.includes(panel.address)) {
         panel.setContent(panelData);
-        serialData = Utils.concatTypedArrays(
-          serialData,
-          panel.getSerialFormat(flush)
-        );
+        const chunk = panel.getSerialFormat(flush);
+        chunks.push(chunk);
+        totalLength += chunk.length;
       }
     });
 
+    const serialData = new Uint8Array(totalLength);
+    let offset = 0;
+    for (const chunk of chunks) {
+      serialData.set(chunk, offset);
+      offset += chunk.length;
+    }
     return serialData;
   }
 
@@ -324,11 +364,11 @@ export default class Display  {
   }
 
   _isFrameChanged(...frameData) {
-    const currentFrameHash = Utils.hashFrameData(frameData);
-    const isNew = (currentFrameHash !== this.lastFrameHash) 
+    const current = frameData.length === 1 ? frameData[0] : frameData;
+    const isNew = !Utils.isFrameEqual(current, this.lastFrameData);
 
     if (isNew) {
-      this.lastFrameHash = currentFrameHash;
+      this.lastFrameData = current;
 
       const now = Date.now();
       if (!this.warnings.renderingSpeed && this.lastSendTime && now - this.lastSendTime < this.minSendInterval) {
@@ -341,25 +381,67 @@ export default class Display  {
     return isNew;
   }
 
+  _reshapeIfFlat(frameData) {
+    if (Array.isArray(frameData) && frameData.length > 0 && !Array.isArray(frameData[0])
+        && frameData.length === this.width * this.height) {
+      const reshaped = [];
+      for (let y = 0; y < this.height; y++) {
+        reshaped.push(frameData.slice(y * this.width, (y + 1) * this.width));
+      }
+      return reshaped;
+    }
+    return frameData;
+  }
+
   send(frameData, flush = true) {
     if (!this.isConnected) {
       this._addQueueItem({frameData, flush})
       return;
     }
+    frameData = this._reshapeIfFlat(frameData);
     frameData = this._validateFrameData(frameData);
 
     if (!this._isFrameChanged(frameData)) return;
 
+    // Keep frame buffer in sync for sendRegion
+    if (Array.isArray(frameData[0])) {
+      this._frameBuffer = frameData.map(row => [...row]);
+    }
+
+    const formattedData = this._formatFrameData(frameData);
+
     this.devices.forEach((device) => {
-      const serialData = this._formatSerialData(frameData, device.addresses, flush);
+      const serialData = this._formatSerialData(formattedData, device.addresses, flush);
       this._write(device, serialData);
     });
+  }
+
+  sendRegion(regionData, x, y) {
+    if (!this._frameBuffer) {
+      this._frameBuffer = Array.from({ length: this.height }, () => new Array(this.width).fill(0));
+    }
+
+    const regionHeight = regionData.length;
+    const regionWidth = regionData[0].length;
+
+    for (let ry = 0; ry < regionHeight; ry++) {
+      for (let rx = 0; rx < regionWidth; rx++) {
+        const ty = y + ry;
+        const tx = x + rx;
+        if (ty >= 0 && ty < this.height && tx >= 0 && tx < this.width) {
+          this._frameBuffer[ty][tx] = regionData[ry][rx];
+        }
+      }
+    }
+
+    const frame = this._frameBuffer.map(row => [...row]);
+    this.send(frame);
   }
 
   _addQueueItem(data) {
     this.sendQueue.push(data);
     if (this.sendQueue.length > this.maxSendQueueLength) {
-      this.sendQueue.pop();
+      this.sendQueue.shift();
       if (!this.warnings.queueFull) {
         this.warnings.queueFull = true;
         console.warn('Send queue is full, discarding the latest frame');

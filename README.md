@@ -12,7 +12,7 @@ A javascript library for flip dot, flip disc, and flip digit displays.
 
 - [flip digit server](https://github.com/kelly/flipdisc-server) draw elaborate visualizations on your flipdisc
 - [flipdot iOS app](https://apps.apple.com/us/app/flipdisc/id6504055618) control your flipdisc from iOS
-- [depth camera](https://github.com/kelly/flipdisc-depth-camera) 
+- [depth camera](https://github.com/kelly/flipdisc-depth-camera)
 - [flip digit canvas](https://github.com/kelly/flipdigit)
 
 ### Install
@@ -24,20 +24,21 @@ $ npm install flipdisc
 ### Simple Usage
 
 ```js
+import { createDisplay } from 'flipdisc'
 
-import { createDisplay } from 'flipdisc' 
-
-const device = '/dev/cu.usbserial-AB0OJSKG' 
+const device = '/dev/cu.usbserial-AB0OJSKG'
 const display = createDisplay([[1], [2]], device)
-display.send(frameData)
 
+// wait for the display to connect
+await display.ready()
+
+display.send(frameData)
 ```
 
-### Advanced Usage 
+### Advanced Usage
 
 ```js
-
-import { createDisplay, Panels } from 'flipdisc' 
+import { createDisplay, Panels } from 'flipdisc'
 
 // layout as a 2D array of panel addresses
 const layout = [[1, 3, 5], [2, 4, 6]]
@@ -79,40 +80,60 @@ const opt = {
 const display = createDisplay(layout, dev, opt)
 ```
 
-
 ### Methods
 
 ```js
-
-// send a single 2D array of frame data. 
-// (0 = not-flipped, 1 = flipped)
+// send a 2D array of frame data (0 = not-flipped, 1 = flipped)
 display.send(frameData)
+
+// also accepts a flat 1D array (auto-reshaped to display dimensions)
+display.send([0, 1, 1, 0, ...])
+
 // also accepts imageData buffer from a gl or canvas instance
+display.send(imageData)
 
+// update a region of the display at position (x, y)
+display.sendRegion([[1, 1], [1, 1]], 10, 3)
+
+// for segment displays: send data for vertical and horizontal segments
 display.sendSegmentData(verticalSegmentData, horizontalSegmentData)
-// for segment displays: send array data for the vertical and/or horizontal aligned segments. 
 
-// get width
-display.width
+// clear the display (all zeros)
+display.clear()
 
-// get height
-display.height
+// fill the display (all ones)
+display.fill()
 
-// get current display data
-display.content
+// close all device connections
+display.close()
 
 // set inverted
-display.setInverted()
+display.setInverted(true)
+```
 
-// get general display info
-display.info
+### Properties
 
+```js
+display.width           // display width (accounts for rotation)
+display.height          // display height (accounts for rotation)
+display.content         // current display data
+display.isConnected     // connection status
+display.info            // general display info
+```
 
+### Events
+
+```js
+// wait for the display to be ready
+await display.ready()
+
+// or use events
+display.on('connected', () => { })
+display.on('disconnected', () => { })
+display.on('error', (err) => { })
 ```
 
 ### Requirements
 
-- RS485 serial device. e.g. [USB to RS485] (https://a.co/d/7IHOosr) or [Ethernet to RS485] (https://a.co/d/1TIwvfq)
+- RS485 serial device. e.g. [USB to RS485](https://a.co/d/7IHOosr) or [Ethernet to RS485](https://a.co/d/1TIwvfq)
 - A flipdisc panel. Currently [AlfaZeta panels](https://flipdots.com/en/home/) and [Hanover panels](https://www.hanoverdisplays.com/) supported. [Reach out](http://x.com/korevec) if you want me to support your panel.
-
-

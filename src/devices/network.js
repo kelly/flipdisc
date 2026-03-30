@@ -21,26 +21,49 @@ export default class NetworkDevice extends Device {
 
   open(callback) {
     const { port, hostname, protocol } = this.connection;
+    this.protocol = protocol;
 
-    this.socket = protocol == 'udp' ? udp.createSocket('udp4') : new net.Socket();
-    this.socket.connect(port, hostname, () => {
-      console.log(`opened connection: ${protocol} port: ${port} hostname: ${hostname}`)
-
+    if (protocol === 'udp') {
+      this.socket = udp.createSocket('udp4');
+      this.remotePort = port;
+      this.remoteHost = hostname;
+      console.log(`opened connection: ${protocol} port: ${port} hostname: ${hostname}`);
       this.isOpen = true;
       this.emit('open');
       callback();
-    });
+    } else {
+      this.socket = new net.Socket();
+      this.socket.connect(port, hostname, () => {
+        console.log(`opened connection: ${protocol} port: ${port} hostname: ${hostname}`);
+        this.isOpen = true;
+        this.emit('open');
+        callback();
+      });
+      this.socket.on('error', (err) => {
+        console.error(`Network error: ${err.message}`);
+      });
+    }
   }
 
   write(data, callback) {
     super.write(data, callback);
-    (this.socket instanceof net.Socket) ? this.socket.write(data, callback) : this.socket.send(data, callback);
+    if (this.protocol === 'udp') {
+      this.socket.send(data, this.remotePort, this.remoteHost, callback);
+    } else {
+      this.socket.write(data, callback);
+    }
   }
 
   close() {
     this.removeAllListeners();
-    this.socket.removeAllListeners();
-    (this.socket instanceof net.Socket) ? this.socket.destroy() : this.socket.close();
+    if (this.socket) {
+      this.socket.removeAllListeners();
+      if (this.protocol === 'udp') {
+        this.socket.close();
+      } else {
+        this.socket.destroy();
+      }
+    }
     this.isOpen = false;
   }
 

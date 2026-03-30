@@ -13,14 +13,18 @@ export default class Device extends EventEmitter {
 
   _addToQueue(data, callback) {
     this.queue.push(data);
-    this.once('open', () => {
-      this.queue.forEach(data => this.write(data));
-      this.queue = [];
-      
-      callback();
-    })
 
-    if (this.queue.length > this.maxQueueLength) 
+    if (!this._queueListenerSet) {
+      this._queueListenerSet = true;
+      this.once('open', () => {
+        const pending = this.queue.slice();
+        this.queue = [];
+        this._queueListenerSet = false;
+        pending.forEach(item => this.write(item));
+      });
+    }
+
+    if (this.queue.length > this.maxQueueLength)
       this.queue.shift()
   }
 

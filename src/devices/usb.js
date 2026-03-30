@@ -42,7 +42,9 @@ export default class USBDevice extends Device {
 
     this._isSerialAvailable(path).then((available) => {
       if (!available) {
-        console.warn(`USB device not available: ${path}`);
+        const err = new Error(`USB device not available: ${path}`);
+        console.warn(err.message);
+        if (callback) callback(err);
         return;
       }
 
@@ -55,7 +57,7 @@ export default class USBDevice extends Device {
         },
         (err) => {
           if (err) {
-            throw new Error(err);
+            if (callback) callback(err);
           } else {
             console.log(
               `Opened USB device: ${this.path} baud rate: ${this.baudRate}`

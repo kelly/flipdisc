@@ -1,16 +1,18 @@
-import { createHash } from 'node:crypto';
-
-function hashFrameData(...arrays) {
-  const flatData = flatten(arrays);
-  const buffer = Buffer.from(flatData);
-  const hash = createHash('md5').update(buffer).digest('hex');
-  return hash;
-}
-
-function flatten(arr) {
-  return arr.reduce((acc, val) => {
-    return acc.concat(Array.isArray(val) ? flatten(val) : val);
-  }, []);
+function isFrameEqual(current, previous) {
+  if (!previous || previous.length !== current.length) return false;
+  for (let i = 0; i < current.length; i++) {
+    const a = current[i];
+    const b = previous[i];
+    if (!Array.isArray(a)) {
+      if (a !== b) return false;
+    } else {
+      if (!b || a.length !== b.length) return false;
+      for (let j = 0; j < a.length; j++) {
+        if (a[j] !== b[j]) return false;
+      }
+    }
+  }
+  return true;
 }
 
 function concatTypedArrays(a, b) { // a, b TypedArray of same type
@@ -63,7 +65,7 @@ function packBits(content, axis, bitorder) {
               packedByte |= 1 << (range - 1 - j);
           }
       }
-      return bitorder === 'little' ? this.reverseBits(packedByte) : packedByte;
+      return bitorder === 'little' ? reverseBits(packedByte) : packedByte;
   });
 }
 
@@ -138,7 +140,7 @@ function resizeImageData(imageData, width, height, newWidth, newHeight) {
     }
   }
 
-  return Array.from(resizedData); 
+  return resizedData;
 }
 
 function formatRGBAPixels(imageData, width, height) {
@@ -170,5 +172,5 @@ function isEmptyArray(arr) {
 }
 
 
-export { concatTypedArrays, packBits, reverseBits, sleep, mergeFrames, areArraysEqual, 
-        formatRGBAPixels, isImageData, isEmptyArray, resizeImageData, createImageData, hashFrameData }
+export { concatTypedArrays, packBits, reverseBits, sleep, mergeFrames, areArraysEqual,
+        formatRGBAPixels, isImageData, isEmptyArray, resizeImageData, createImageData, isFrameEqual }
